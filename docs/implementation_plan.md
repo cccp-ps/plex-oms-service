@@ -80,17 +80,17 @@ The plan is organized into logical phases that build upon each other, ensuring a
 ## Phase 3: Pydantic Models and Schemas
 
 - [ ] **Module: `app/models/plex_models.py`**
-  - [ ] **Analyze PlexAPI:** Review PlexAPI response structures for users and media sources
-  - [ ] **Feature: Plex User Model**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: PlexUser model validation with valid data
-      - [ ] Test case: Handle missing required fields
-      - [ ] Test case: Username and email validation
-      - [ ] Test case: OAuth token model with expiration handling
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_models.py`
-    - [ ] **Implementation:** Create PlexUser Pydantic model
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Analyze PlexAPI:** Review PlexAPI response structures for users and media sources
+  - [x] **Feature: Plex User Model**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: PlexUser model validation with valid data
+      - [x] Test case: Handle missing required fields
+      - [x] Test case: Username and email validation
+      - [x] Test case: OAuth token model with expiration handling
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_models.py`
+    - [x] **Implementation:** Create PlexUser Pydantic model
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Online Media Source Model**
     - [ ] **TDD: Define Test Cases:**
