@@ -57,21 +57,12 @@ This implementation plan follows strict Test-Driven Development (TDD) methodolog
   - Set up build optimization and code splitting
   - Configure environment variable handling
 
-### 1.4 Development Tools Configuration
-- [x] **Create `.gitignore`** (already exists - verify completeness)
-- [ ] **Create development scripts in `scripts/`**
-  - `scripts/dev.sh` - Start development servers
-  - `scripts/test.sh` - Run all tests
-  - `scripts/lint.sh` - Run linting and type checking
-
----
-
 ## Phase 2: Core Backend Development (TDD)
 
 ### 2.1 Configuration & Models (TDD)
 
 #### Tests First
-- [ ] **Create `tests/conftest.py`**
+- [x] **Create `tests/conftest.py`**
   - Set up pytest fixtures for FastAPI testing
   - Configure async test client
   - Create mock Plex API fixtures
