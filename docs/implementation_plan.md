@@ -103,18 +103,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `app/schemas/auth_schemas.py`**
-  - [ ] **Analyze Requirements:** Define request/response schemas for authentication endpoints
-  - [ ] **Feature: Authentication Request/Response Schemas**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: OAuth initiation request schema
-      - [ ] Test case: OAuth callback response schema
-      - [ ] Test case: Token refresh request schema
-      - [ ] Test case: Authentication error response schema
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_schemas.py`
-    - [ ] **Implementation:** Create authentication-specific Pydantic schemas
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/schemas/auth_schemas.py`**
+  - [x] **Analyze Requirements:** Define request/response schemas for authentication endpoints
+  - [x] **Feature: Authentication Request/Response Schemas**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: OAuth initiation request schema
+      - [x] Test case: OAuth callback response schema
+      - [x] Test case: Token refresh request schema
+      - [x] Test case: Authentication error response schema
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_schemas.py`
+    - [x] **Implementation:** Create authentication-specific Pydantic schemas
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 - [ ] **Module: `app/schemas/media_source_schemas.py`**
   - [ ] **Analyze Requirements:** Define request/response schemas for media source operations
