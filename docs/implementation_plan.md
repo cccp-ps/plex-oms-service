@@ -132,18 +132,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
 ## Phase 4: Authentication Service
 
 - [ ] **Module: `app/services/auth_service.py`**
-  - [ ] **Analyze PlexAPI:** Review MyPlexPinLogin OAuth functionality and MyPlexAccount authentication
-  - [ ] **Feature: OAuth Flow Initiation**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Initiate OAuth flow using MyPlexPinLogin(oauth=True)
-      - [ ] Test case: Generate secure state parameter
-      - [ ] Test case: Handle PlexAPI connection errors
-      - [ ] Test case: Return OAuth URL for direct Plex account login
-      - [ ] Test case: Ensure oauth=True is always used for better user experience
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_service.py`
-    - [ ] **Implementation:** Create PlexAuthService class with OAuth initiation (always use oauth=True)
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Analyze PlexAPI:** Review MyPlexPinLogin OAuth functionality and MyPlexAccount authentication
+  - [x] **Feature: OAuth Flow Initiation**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Initiate OAuth flow using MyPlexPinLogin(oauth=True)
+      - [x] Test case: Generate secure state parameter
+      - [x] Test case: Handle PlexAPI connection errors
+      - [x] Test case: Return OAuth URL for direct Plex account login
+      - [x] Test case: Ensure oauth=True is always used for better user experience
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_service.py`
+    - [x] **Implementation:** Create PlexAuthService class with OAuth initiation (always use oauth=True)
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: OAuth Flow Completion**
     - [ ] **TDD: Define Test Cases:**

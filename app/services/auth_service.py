@@ -15,11 +15,14 @@ Features:
 
 import secrets
 import time
-from typing import Any
+from typing import TYPE_CHECKING
 
 from plexapi.myplex import MyPlexPinLogin  # pyright: ignore[reportMissingTypeStubs]
 
 from app.config import get_settings
+
+if TYPE_CHECKING:
+    from app.config import Settings
 
 
 class PlexAuthService:
@@ -34,9 +37,9 @@ class PlexAuthService:
     best practices for OAuth implementation.
     """
     
-    def __init__(self, settings: Any | None = None) -> None:
+    def __init__(self, settings: "Settings | None" = None) -> None:
         """Initialize the PlexAuthService with secure state management."""
-        self._settings: Any = settings or get_settings()
+        self._settings: "Settings" = settings or get_settings()
         self._pending_states: set[str] = set()
         self._state_timestamps: dict[str, float] = {}
         self._state_ttl: int = 600  # 10 minutes TTL for state parameters
@@ -75,12 +78,16 @@ class PlexAuthService:
         self._state_timestamps[state] = time.time()
         
         # Get OAuth URL for direct Plex account login
-        oauth_url = pin_login.oauthUrl(forwardUrl=forward_url) if forward_url else pin_login.oauthUrl()
+        oauth_url: str = (
+            pin_login.oauthUrl(forwardUrl=forward_url)  # pyright: ignore[reportUnknownMemberType]
+            if forward_url 
+            else pin_login.oauthUrl()  # pyright: ignore[reportUnknownMemberType]
+        )
         
         return {
             "oauth_url": oauth_url,
             "state": state,
-            "code": pin_login.code  # pyright: ignore[reportAttributeAccessIssue]
+            "code": pin_login.code  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
         }
     
     def _generate_state_parameter(self) -> str:
@@ -95,7 +102,7 @@ class PlexAuthService:
         """
         return secrets.token_urlsafe(32)
     
-    def _validate_state_parameter(self, state: Any) -> bool:
+    def _validate_state_parameter(self, state: object) -> bool:
         """
         Validate a state parameter for CSRF protection.
         
@@ -136,4 +143,4 @@ class PlexAuthService:
         
         for state in expired_states:
             self._pending_states.discard(state)
-            self._state_timestamps.pop(state, None) 
+            _ = self._state_timestamps.pop(state, None) 
