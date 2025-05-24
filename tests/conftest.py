@@ -11,8 +11,7 @@ Following TDD principles with type-safe fixture definitions.
 """
 
 import tempfile
-from collections.abc import AsyncGenerator, Generator
-from typing import Any
+from collections.abc import AsyncGenerator, Callable, Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -75,7 +74,10 @@ def mock_plex_pin_login(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_pin_login.reload = MagicMock()
     
     # Patch the class
-    monkeypatch.setattr("plexapi.myplex.MyPlexPinLogin", lambda *args, **kwargs: mock_pin_login)  # pyright: ignore[reportUnknownLambdaType]
+    def mock_pin_login_factory(*_args: object, **_kwargs: object) -> MagicMock:
+        return mock_pin_login
+    
+    monkeypatch.setattr("plexapi.myplex.MyPlexPinLogin", mock_pin_login_factory)
     
     return mock_pin_login
 
@@ -116,11 +118,14 @@ def mock_plex_account(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     ])
     
     # Mock opt-out functionality
-    mock_account.accountOptOut = MagicMock()  # pyright: ignore[reportAny]
-    mock_account.accountOptOut.optOut = MagicMock(return_value=True)
+    mock_account.accountOptOut = MagicMock()
+    mock_account.accountOptOut.optOut = MagicMock(return_value=True)  # pyright: ignore[reportAny]
     
     # Patch the class
-    monkeypatch.setattr("plexapi.myplex.MyPlexAccount", lambda *args, **kwargs: mock_account)  # pyright: ignore[reportUnknownLambdaType]
+    def mock_account_factory(*_args: object, **_kwargs: object) -> MagicMock:
+        return mock_account
+    
+    monkeypatch.setattr("plexapi.myplex.MyPlexAccount", mock_account_factory)
     
     return mock_account
 
@@ -136,13 +141,16 @@ def mock_plex_server(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_server.version = "1.40.0.7998"
     mock_server.myPlexUsername = "testuser"
     
-    monkeypatch.setattr("plexapi.server.PlexServer", lambda *args, **kwargs: mock_server)  # pyright: ignore[reportUnknownLambdaType]
+    def mock_server_factory(*_args: object, **_kwargs: object) -> MagicMock:
+        return mock_server
+    
+    monkeypatch.setattr("plexapi.server.PlexServer", mock_server_factory)
     
     return mock_server
 
 
 @pytest.fixture
-def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: MagicMock) -> dict[str, Any]:
+def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: MagicMock) -> dict[str, object]:
     """Mock successful OAuth flow from start to finish."""
     # Configure successful PIN login
     mock_plex_pin_login.waitForLogin.return_value = True  # pyright: ignore[reportAny]
@@ -160,7 +168,7 @@ def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: M
 
 
 @pytest.fixture
-def mock_oauth_flow_failure(mock_plex_pin_login: MagicMock) -> dict[str, Any]:
+def mock_oauth_flow_failure(mock_plex_pin_login: MagicMock) -> dict[str, object]:
     """Mock failed OAuth flow scenarios."""
     # Configure failed PIN login
     mock_plex_pin_login.waitForLogin.side_effect = Unauthorized("Invalid PIN")  # pyright: ignore[reportAny]
@@ -175,15 +183,15 @@ def mock_oauth_flow_failure(mock_plex_pin_login: MagicMock) -> dict[str, Any]:
 
 
 @pytest.fixture
-def mock_plex_api_errors() -> dict[str, Any]:  # pyright: ignore[reportUnusedParameter]
+def mock_plex_api_errors() -> dict[str, Callable[..., None]]:
     """Mock various Plex API error scenarios for testing error handling."""
-    def raise_unauthorized(*_args: Any, **_kwargs: Any) -> None:  # pyright: ignore[reportUnusedParameter]
+    def raise_unauthorized(*_args: object, **_kwargs: object) -> None:
         raise Unauthorized("Invalid authentication token")
     
-    def raise_not_found(*_args: Any, **_kwargs: Any) -> None:  # pyright: ignore[reportUnusedParameter]
+    def raise_not_found(*_args: object, **_kwargs: object) -> None:
         raise NotFound("Resource not found")
     
-    def raise_bad_request(*_args: Any, **_kwargs: Any) -> None:  # pyright: ignore[reportUnusedParameter]
+    def raise_bad_request(*_args: object, **_kwargs: object) -> None:
         raise BadRequest("Invalid request parameters")
     
     return {
@@ -223,7 +231,7 @@ def auth_headers(valid_auth_token: str) -> dict[str, str]:
 
 
 @pytest.fixture
-def test_user_data() -> dict[str, Any]:
+def test_user_data() -> dict[str, str | int]:
     """Provide test user data for authentication tests."""
     return {
         "id": 12345,
@@ -238,7 +246,7 @@ def test_user_data() -> dict[str, Any]:
 # Media Sources Test Fixtures
 
 @pytest.fixture
-def sample_media_sources() -> list[dict[str, Any]]:
+def sample_media_sources() -> list[dict[str, str | list[str] | bool]]:
     """Provide sample online media sources data for testing."""
     return [
         {
@@ -269,7 +277,7 @@ def sample_media_sources() -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def empty_media_sources() -> list[dict[str, Any]]:
+def empty_media_sources() -> list[dict[str, str | list[str] | bool]]:
     """Provide empty media sources list for testing edge cases."""
     return []
 
@@ -277,7 +285,7 @@ def empty_media_sources() -> list[dict[str, Any]]:
 # Database Test Fixtures (if database is used in future)
 
 @pytest.fixture
-def test_db_config() -> dict[str, Any]:
+def test_db_config() -> dict[str, str | bool]:
     """Provide test database configuration."""
     return {
         "database_url": "sqlite:///test.db",
@@ -309,7 +317,7 @@ def security_headers() -> dict[str, str]:
 # Test Configuration Fixtures
 
 @pytest.fixture
-def test_config() -> dict[str, Any]:
+def test_config() -> dict[str, str | bool | list[str]]:
     """Provide test configuration overrides."""
     return {
         "TESTING": True,
