@@ -157,6 +157,66 @@ class TestOAuthConfiguration:
         assert settings.plex_client_id == "valid-client-id-12345"
         assert settings.plex_client_secret.get_secret_value() == "valid-client-secret-abcdef67890"
 
+    def test_oauth_client_id_empty_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth client ID validation with empty value."""
+        # Set up required environment variables
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "valid-client-secret")
+        
+        # Test with empty client ID
+        monkeypatch.setenv("PLEX_CLIENT_ID", "")
+        
+        with pytest.raises(ValidationError) as exc_info:
+            _ = Settings()  # pyright: ignore[reportCallIssue]
+        
+        error_str = str(exc_info.value)
+        assert "plex_client_id" in error_str or "PLEX_CLIENT_ID" in error_str
+
+    def test_oauth_client_secret_empty_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth client secret validation with empty value."""
+        # Set up required environment variables
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        monkeypatch.setenv("PLEX_CLIENT_ID", "valid-client-id")
+        
+        # Test with empty client secret
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "")
+        
+        with pytest.raises(ValidationError) as exc_info:
+            _ = Settings()  # pyright: ignore[reportCallIssue]
+        
+        error_str = str(exc_info.value)
+        assert "plex_client_secret" in error_str or "PLEX_CLIENT_SECRET" in error_str
+
+    def test_oauth_client_id_whitespace_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth client ID validation with whitespace-only value."""
+        # Set up required environment variables
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "valid-client-secret")
+        
+        # Test with whitespace-only client ID
+        monkeypatch.setenv("PLEX_CLIENT_ID", "   ")
+        
+        with pytest.raises(ValidationError) as exc_info:
+            _ = Settings()  # pyright: ignore[reportCallIssue]
+        
+        error_str = str(exc_info.value)
+        assert "plex_client_id" in error_str or "PLEX_CLIENT_ID" in error_str
+
+    def test_oauth_client_secret_whitespace_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth client secret validation with whitespace-only value."""
+        # Set up required environment variables
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        monkeypatch.setenv("PLEX_CLIENT_ID", "valid-client-id")
+        
+        # Test with whitespace-only client secret
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "   ")
+        
+        with pytest.raises(ValidationError) as exc_info:
+            _ = Settings()  # pyright: ignore[reportCallIssue]
+        
+        error_str = str(exc_info.value)
+        assert "plex_client_secret" in error_str or "PLEX_CLIENT_SECRET" in error_str
+
     def test_redirect_uri_configuration(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test redirect URI configuration."""
         # Set up required environment variables
@@ -171,6 +231,48 @@ class TestOAuthConfiguration:
         
         # Verify redirect URI is set
         assert settings.oauth_redirect_uri == "https://myapp.example.com/auth/callback"
+
+    def test_redirect_uri_default_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test redirect URI default value when not specified."""
+        # Set up required environment variables without redirect URI
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Verify default redirect URI is set
+        assert settings.oauth_redirect_uri == "http://localhost:8000/auth/callback"
+
+    def test_redirect_uri_https_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test redirect URI accepts both HTTP and HTTPS schemes."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with HTTPS redirect URI
+        monkeypatch.setenv("OAUTH_REDIRECT_URI", "https://secure.example.com/auth/callback")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Should accept HTTPS URIs
+        assert settings.oauth_redirect_uri == "https://secure.example.com/auth/callback"
+
+    def test_redirect_uri_localhost_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test redirect URI accepts localhost for development."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with localhost redirect URI
+        monkeypatch.setenv("OAUTH_REDIRECT_URI", "http://localhost:3000/auth/callback")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Should accept localhost URIs for development
+        assert settings.oauth_redirect_uri == "http://localhost:3000/auth/callback"
 
     def test_oauth_scopes_validation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test OAuth scopes validation."""
@@ -187,6 +289,63 @@ class TestOAuthConfiguration:
         # Verify scopes are parsed correctly using the property
         assert settings.oauth_scopes_list == ["read", "write"]
 
+    def test_oauth_scopes_single_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth scopes with single scope."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with single OAuth scope
+        monkeypatch.setenv("OAUTH_SCOPES", "read")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Single scope should be in a list
+        assert settings.oauth_scopes_list == ["read"]
+
+    def test_oauth_scopes_whitespace_handling(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth scopes whitespace handling in comma-separated values."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with OAuth scopes containing whitespace
+        monkeypatch.setenv("OAUTH_SCOPES", " read , write , admin ")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Whitespace should be trimmed from scopes
+        assert settings.oauth_scopes_list == ["read", "write", "admin"]
+
+    def test_oauth_scopes_empty_values_filtering(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth scopes filtering of empty values."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with OAuth scopes containing empty values
+        monkeypatch.setenv("OAUTH_SCOPES", "read,,write,")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Empty values should be filtered out
+        assert settings.oauth_scopes_list == ["read", "write"]
+
+    def test_oauth_scopes_default_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth scopes default value when not specified."""
+        # Set up required environment variables without scopes
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Verify default scope is set
+        assert settings.oauth_scopes_list == ["read"]
+
     def test_oauth_default_values(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test OAuth configuration default values."""
         # Set up minimal required environment variables
@@ -200,6 +359,69 @@ class TestOAuthConfiguration:
         assert settings.oauth_redirect_uri is not None
         assert settings.oauth_scopes_list is not None
         assert len(settings.oauth_scopes_list) > 0
+
+    def test_oauth_complete_configuration(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test complete OAuth configuration with all fields specified."""
+        # Set up all OAuth environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "complete-client-id-12345")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "complete-client-secret-abcdef67890")
+        monkeypatch.setenv("OAUTH_REDIRECT_URI", "https://production.example.com/auth/callback")
+        monkeypatch.setenv("OAUTH_SCOPES", "read,write,admin")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Verify all OAuth configuration is set correctly
+        assert settings.plex_client_id == "complete-client-id-12345"
+        assert settings.plex_client_secret.get_secret_value() == "complete-client-secret-abcdef67890"
+        assert settings.oauth_redirect_uri == "https://production.example.com/auth/callback"
+        assert settings.oauth_scopes_list == ["read", "write", "admin"]
+
+    def test_oauth_client_credentials_trimming(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth client credentials automatically trim whitespace."""
+        # Set up required environment variables
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with OAuth credentials containing leading/trailing whitespace
+        monkeypatch.setenv("PLEX_CLIENT_ID", "  trimmed-client-id  ")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "  trimmed-client-secret  ")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Verify whitespace is trimmed automatically
+        assert settings.plex_client_id == "trimmed-client-id"
+        assert settings.plex_client_secret.get_secret_value() == "trimmed-client-secret"
+
+    def test_oauth_scopes_complex_parsing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test OAuth scopes parsing with complex whitespace and empty values."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with complex OAuth scopes string
+        monkeypatch.setenv("OAUTH_SCOPES", " , read,  , write,  admin  ,, ")
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Should filter empty values and trim whitespace
+        assert settings.oauth_scopes_list == ["read", "write", "admin"]
+
+    def test_oauth_redirect_uri_special_characters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test redirect URI accepts URLs with query parameters and special characters."""
+        # Set up required environment variables
+        monkeypatch.setenv("PLEX_CLIENT_ID", "test-client-id")
+        monkeypatch.setenv("PLEX_CLIENT_SECRET", "test-client-secret")
+        monkeypatch.setenv("SECRET_KEY", "test-secret-key-minimum-32-chars-req")
+        
+        # Test with redirect URI containing query parameters
+        redirect_uri = "https://app.example.com/auth/callback?state=test&redirect_to=%2Fdashboard"
+        monkeypatch.setenv("OAUTH_REDIRECT_URI", redirect_uri)
+        
+        settings = Settings()  # pyright: ignore[reportCallIssue]
+        
+        # Should accept URLs with query parameters
+        assert settings.oauth_redirect_uri == redirect_uri
 
 
 class TestEnvironmentSpecificSettings:

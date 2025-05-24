@@ -67,15 +67,15 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: OAuth Configuration**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: OAuth client ID and secret validation
-      - [ ] Test case: Redirect URI configuration
-      - [ ] Test case: OAuth scopes validation
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_config.py`
-    - [ ] **Implementation:** Add OAuth-specific configuration fields
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: OAuth Configuration**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: OAuth client ID and secret validation
+      - [x] Test case: Redirect URI configuration
+      - [x] Test case: OAuth scopes validation
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_config.py`
+    - [x] **Implementation:** Add OAuth-specific configuration fields
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 3: Pydantic Models and Schemas
 

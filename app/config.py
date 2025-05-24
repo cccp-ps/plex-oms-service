@@ -8,7 +8,7 @@ Supports OAuth configuration, CORS settings, and security validation.
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -83,6 +83,23 @@ class Settings(BaseSettings):
         description="Session expiration time in minutes"
     )
     
+    @field_validator('plex_client_id')
+    @classmethod
+    def validate_plex_client_id(cls, v: str) -> str:
+        """Validate Plex client ID is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError('Plex client ID cannot be empty or whitespace-only')
+        return v.strip()
+    
+    @field_validator('plex_client_secret')
+    @classmethod
+    def validate_plex_client_secret(cls, v: SecretStr) -> SecretStr:
+        """Validate Plex client secret is not empty or whitespace-only."""
+        secret_value = v.get_secret_value()
+        if not secret_value or not secret_value.strip():
+            raise ValueError('Plex client secret cannot be empty or whitespace-only')
+        return SecretStr(secret_value.strip())
+
     @model_validator(mode='after')
     def set_environment_specific_values(self) -> 'Settings':
         """Set debug and rate limiting based on environment after validation."""
