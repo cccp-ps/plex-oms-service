@@ -394,4 +394,243 @@ class PlexAuthService:
             subscription_active=subscription_active,
             subscription_plan=subscription_plan,
             token_expires_at=None  # Will be set based on OAuth response if available
-        ) 
+        )
+    
+    def validate_token(self, token: str | None) -> dict[str, object]:
+        """
+        Validate an existing token with MyPlexAccount.
+        
+        Uses MyPlexAccount to verify if a token is still valid and retrieve
+        the associated user information. Handles various error scenarios
+        gracefully and provides detailed validation results.
+        
+        Args:
+            token: Plex authentication token to validate
+            
+        Returns:
+            Dict containing:
+                - valid: Boolean indicating if token is valid
+                - user: User information if token is valid
+                - error: Error message if token is invalid
+                - expired: Boolean indicating if token is expired (when applicable)
+                
+        Raises:
+            None - All exceptions are caught and returned in result dict
+        """
+        # Validate input parameters
+        if not token:
+            return {
+                "valid": False,
+                "error": "Token is required",
+                "expired": False
+            }
+        
+        # Basic token format validation
+        if not self._validate_token_format(token):
+            return {
+                "valid": False,
+                "error": "Invalid token format",
+                "expired": False
+            }
+        
+        try:
+            # Attempt to create MyPlexAccount with the token
+            account = MyPlexAccount(token=token)
+            
+            # Convert account to PlexUser model
+            user = self._convert_account_to_user(account)
+            
+            return {
+                "valid": True,
+                "user": {
+                    "id": user.id,
+                    "uuid": user.uuid,
+                    "username": user.username,
+                    "email": user.email,
+                    "authentication_token": user.authentication_token,
+                    "thumb": user.thumb,
+                    "confirmed": user.confirmed,
+                    "restricted": user.restricted,
+                    "guest": user.guest,
+                    "subscription_active": user.subscription_active,
+                    "subscription_plan": user.subscription_plan,
+                    "token_expires_at": user.token_expires_at.isoformat() if user.token_expires_at else None
+                },
+                "expired": False
+            }
+            
+        except Unauthorized as e:
+            # Handle various unauthorized scenarios
+            error_msg = str(e)
+            is_expired = "expired" in error_msg.lower() or "token" in error_msg.lower()
+            
+            return {
+                "valid": False,
+                "error": error_msg,
+                "expired": is_expired
+            }
+            
+        except BadRequest as e:
+            # Handle connection and other API errors
+            return {
+                "valid": False,
+                "error": str(e),
+                "expired": False
+            }
+            
+        except Exception as e:
+            # Handle any other unexpected errors
+            return {
+                "valid": False,
+                "error": f"Token validation failed: {str(e)}",
+                "expired": False
+            }
+    
+    def refresh_token(self, old_token: str) -> dict[str, object]:
+        """
+        Refresh a token if possible using MyPlexAccount.
+        
+        Attempts to refresh an authentication token by creating a new
+        MyPlexAccount instance and retrieving updated authentication
+        information. Note that PlexAPI doesn't provide a direct refresh
+        mechanism, so this method attempts to re-authenticate.
+        
+        Args:
+            old_token: The existing token to refresh
+            
+        Returns:
+            Dict containing:
+                - success: Boolean indicating if refresh was successful
+                - access_token: New authentication token if successful
+                - user: Updated user information if successful
+                - error: Error message if refresh failed
+                
+        Raises:
+            None - All exceptions are caught and returned in result dict
+        """
+        try:
+            # Attempt to create a new MyPlexAccount instance
+            # This effectively validates and potentially refreshes the token
+            account = MyPlexAccount(token=old_token)
+            
+            # Get the current authentication token (may be refreshed)
+            current_token = getattr(account, 'authenticationToken', old_token)
+            
+            # If we get here, the token is still valid or was refreshed
+            user = self._convert_account_to_user(account)
+            
+            return {
+                "success": True,
+                "access_token": current_token,
+                "user": {
+                    "id": user.id,
+                    "uuid": user.uuid,
+                    "username": user.username,
+                    "email": user.email,
+                    "authentication_token": user.authentication_token,
+                    "thumb": user.thumb,
+                    "confirmed": user.confirmed,
+                    "restricted": user.restricted,
+                    "guest": user.guest,
+                    "subscription_active": user.subscription_active,
+                    "subscription_plan": user.subscription_plan,
+                    "token_expires_at": user.token_expires_at.isoformat() if user.token_expires_at else None
+                },
+                "token_type": "Bearer",
+                "expires_in": 3600  # Default expiration
+            }
+            
+        except Unauthorized as e:
+            # Token cannot be refreshed
+            return {
+                "success": False,
+                "error": str(e)
+            }
+            
+        except BadRequest as e:
+            # Connection or API error
+            return {
+                "success": False,
+                "error": str(e)
+            }
+            
+        except Exception as e:
+            # Any other error
+            return {
+                "success": False,
+                "error": f"Token refresh failed: {str(e)}"
+            }
+    
+    def clear_invalid_session(self, session_data: dict[str, object]) -> dict[str, object]:
+        """
+        Clear invalid session data.
+        
+        Provides a method to clear session data when tokens are invalid
+        or sessions have expired. This is used for cleanup after
+        validation failures.
+        
+        Args:
+            session_data: Session information to clear
+            
+        Returns:
+            Dict containing:
+                - cleared: Boolean indicating if session was cleared
+                - session_id: Identifier for the cleared session
+                - reason: Reason for clearing the session
+        """
+        # Extract session information safely
+        user_id = session_data.get("user_id", "unknown")
+        token = session_data.get("token", "")
+        expires_at = session_data.get("expires_at")
+        
+        # Determine the reason for clearing
+        reason = "invalid_token"
+        
+        # Check if session is expired based on timestamp
+        if expires_at is not None:
+            try:
+                # Safely convert to float with type checking
+                if isinstance(expires_at, (int, float, str)):
+                    expires_timestamp = float(expires_at)
+                    current_time = time.time()
+                    if current_time > expires_timestamp:
+                        reason = "session_expired"
+                else:
+                    reason = "invalid_session_data"
+            except (TypeError, ValueError):
+                # Invalid timestamp format
+                reason = "invalid_session_data"
+        
+        # Generate a session identifier for tracking
+        session_id = f"session_{user_id}_{hash(str(token))}"
+        
+        return {
+            "cleared": True,
+            "session_id": session_id,
+            "reason": reason
+        }
+    
+    def _validate_token_format(self, token: str) -> bool:
+        """
+        Validate basic token format requirements.
+        
+        Performs basic validation on token format to catch obviously
+        invalid tokens before making API calls.
+        
+        Args:
+            token: Token string to validate
+            
+        Returns:
+            True if token format appears valid, False otherwise
+        """
+        # Basic length check (Plex tokens are typically longer than 10 characters)
+        if len(token) < 10:
+            return False
+        
+        # Check for invalid characters that shouldn't be in tokens
+        invalid_chars = ['@', '#', '!', ' ', '\n', '\r', '\t']
+        for char in invalid_chars:
+            if char in token:
+                return False
+        
+        return True 

@@ -145,28 +145,28 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: OAuth Flow Completion**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Complete OAuth flow with valid authorization code
-      - [ ] Test case: Validate state parameter for CSRF protection
-      - [ ] Test case: Retrieve MyPlexAccount with OAuth token
-      - [ ] Test case: Handle invalid authorization code scenarios
-      - [ ] Test case: Handle expired OAuth session scenarios
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
-    - [ ] **Implementation:** Add OAuth completion methods with code verification
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: OAuth Flow Completion**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Complete OAuth flow with valid authorization code
+      - [x] Test case: Validate state parameter for CSRF protection
+      - [x] Test case: Retrieve MyPlexAccount with OAuth token
+      - [x] Test case: Handle invalid authorization code scenarios
+      - [x] Test case: Handle expired OAuth session scenarios
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
+    - [x] **Implementation:** Add OAuth completion methods with code verification
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Token Validation and Refresh**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Validate existing token with MyPlexAccount
-      - [ ] Test case: Handle expired tokens
-      - [ ] Test case: Refresh token if possible
-      - [ ] Test case: Clear invalid sessions
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
-    - [ ] **Implementation:** Add token validation and refresh methods
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Token Validation and Refresh**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Validate existing token with MyPlexAccount
+      - [x] Test case: Handle expired tokens
+      - [x] Test case: Refresh token if possible
+      - [x] Test case: Clear invalid sessions
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
+    - [x] **Implementation:** Add token validation and refresh methods
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 5: Plex API Service
 

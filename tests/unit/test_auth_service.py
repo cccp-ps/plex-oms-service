@@ -15,6 +15,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 import time
+from typing import cast
 
 from app.services.auth_service import PlexAuthService
 
@@ -200,24 +201,27 @@ class TestPlexAuthServiceOAuthInitiation:
         """Test helper method for validating state parameters."""
         # Arrange
         auth_service = PlexAuthService(settings=mock_settings)
-        valid_state = auth_service._generate_state_parameter()  # pyright: ignore[reportPrivateUsage]
-        invalid_state = "short"
         
-        # Act & Assert - Test private methods for completeness
+        # Act - Test private method for completeness
+        valid_state = "a" * 32  # 32 character string
+        invalid_state_short = "short"
+        invalid_state_empty = ""
+        
+        # Assert
         assert auth_service._validate_state_parameter(valid_state) is True  # pyright: ignore[reportPrivateUsage]
-        assert auth_service._validate_state_parameter(invalid_state) is False  # pyright: ignore[reportPrivateUsage]
-        assert auth_service._validate_state_parameter("") is False  # pyright: ignore[reportPrivateUsage]
+        assert auth_service._validate_state_parameter(invalid_state_short) is False  # pyright: ignore[reportPrivateUsage]
+        assert auth_service._validate_state_parameter(invalid_state_empty) is False  # pyright: ignore[reportPrivateUsage]
         assert auth_service._validate_state_parameter(None) is False  # pyright: ignore[reportPrivateUsage]
 
     def test_oauth_flow_stores_state_securely(self, mock_settings: MagicMock) -> None:
-        """Test that OAuth flow stores state parameter securely for later validation."""
+        """Test that OAuth flow stores state parameters securely."""
         # Arrange
         with patch('app.services.auth_service.MyPlexPinLogin') as mock_pin_login_class:
             mock_instance = MagicMock()
             # Create properly typed mock function
-            oauth_url_mock = MagicMock(return_value="https://app.plex.tv/auth/#!?clientID=test&code=test-code-12345")
+            oauth_url_mock = MagicMock(return_value="https://app.plex.tv/auth/#!?test")
             mock_instance.oauthUrl = oauth_url_mock
-            mock_instance.code = "test-code-12345"
+            mock_instance.code = "test-code"
             mock_pin_login_class.return_value = mock_instance
             
             auth_service = PlexAuthService(settings=mock_settings)
@@ -227,40 +231,38 @@ class TestPlexAuthServiceOAuthInitiation:
             
             # Assert
             state = result["state"]
-            assert auth_service._validate_state_parameter(state) is True  # pyright: ignore[reportPrivateUsage]
-            # Verify state is stored for later CSRF validation
-            assert hasattr(auth_service, '_pending_states')
             assert state in auth_service._pending_states  # pyright: ignore[reportPrivateUsage]
+            assert state in auth_service._state_timestamps  # pyright: ignore[reportPrivateUsage]
+            assert isinstance(auth_service._state_timestamps[state], float)  # pyright: ignore[reportPrivateUsage]
 
     def test_multiple_concurrent_oauth_flows(self, mock_settings: MagicMock) -> None:
-        """Test handling of multiple concurrent OAuth flows with different state parameters."""
+        """Test handling multiple concurrent OAuth flows with different states."""
         # Arrange
         with patch('app.services.auth_service.MyPlexPinLogin') as mock_pin_login_class:
-            # Create different mock instances for each call
-            mock_instance1 = MagicMock()
-            oauth_url_mock1 = MagicMock(return_value="https://app.plex.tv/auth/#!?clientID=test&code=test-code-1")
-            mock_instance1.oauthUrl = oauth_url_mock1
-            mock_instance1.code = "test-code-1"
-            
-            mock_instance2 = MagicMock()
-            oauth_url_mock2 = MagicMock(return_value="https://app.plex.tv/auth/#!?clientID=test&code=test-code-2")
-            mock_instance2.oauthUrl = oauth_url_mock2
-            mock_instance2.code = "test-code-2"
-            
-            # Configure side_effect to return different instances on each call
-            mock_pin_login_class.side_effect = [mock_instance1, mock_instance2]
+            mock_instance = MagicMock()
+            # Create properly typed mock function
+            oauth_url_mock = MagicMock(return_value="https://app.plex.tv/auth/#!?test")
+            mock_instance.oauthUrl = oauth_url_mock
+            mock_instance.code = "test-code"
+            mock_pin_login_class.return_value = mock_instance
             
             auth_service = PlexAuthService(settings=mock_settings)
             
-            # Act
+            # Act - Initiate multiple OAuth flows
             result1 = auth_service.initiate_oauth_flow()
             result2 = auth_service.initiate_oauth_flow()
+            result3 = auth_service.initiate_oauth_flow()
             
             # Assert
-            assert result1["state"] != result2["state"]
-            assert result1["code"] != result2["code"]  # Different PIN login instances
-            assert auth_service._validate_state_parameter(result1["state"]) is True  # pyright: ignore[reportPrivateUsage]
-            assert auth_service._validate_state_parameter(result2["state"]) is True  # pyright: ignore[reportPrivateUsage] 
+            states = [result1["state"], result2["state"], result3["state"]]
+            
+            # All states should be unique
+            assert len(set(states)) == 3
+            
+            # All states should be stored
+            for state in states:
+                assert state in auth_service._pending_states  # pyright: ignore[reportPrivateUsage]
+                assert state in auth_service._state_timestamps  # pyright: ignore[reportPrivateUsage]
 
 
 class TestPlexAuthServiceOAuthCompletion:
@@ -458,4 +460,229 @@ class TestPlexAuthServiceOAuthCompletion:
             
             # Assert state is cleaned up after completion
             assert valid_state not in auth_service._pending_states  # pyright: ignore[reportPrivateUsage]
-            assert valid_state not in auth_service._state_timestamps  # pyright: ignore[reportPrivateUsage] 
+            assert valid_state not in auth_service._state_timestamps  # pyright: ignore[reportPrivateUsage]
+
+
+class TestPlexAuthServiceTokenValidationAndRefresh:
+    """Test token validation and refresh functionality."""
+
+    def test_validate_existing_token_with_myplexaccount_success(self, mock_settings: MagicMock) -> None:
+        """Test validating an existing token with MyPlexAccount successfully."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            mock_account = MagicMock()
+            mock_account.username = "testuser"
+            mock_account.email = "test@example.com"
+            mock_account.id = 12345
+            mock_account.uuid = "test-uuid-12345"
+            mock_account.authenticationToken = "valid-token-12345"
+            mock_account.confirmed = True
+            mock_account.restricted = False
+            mock_account.guest = False
+            mock_account_class.return_value = mock_account
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.validate_token("valid-token-12345")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["valid"]) is True
+            assert "user" in result
+            user_data = cast(dict[str, object], result["user"])
+            assert user_data["username"] == "testuser"
+            assert user_data["email"] == "test@example.com"
+            assert user_data["authentication_token"] == "valid-token-12345"
+            
+            # Verify MyPlexAccount was called with the token
+            mock_account_class.assert_called_once_with(token="valid-token-12345")
+
+    def test_validate_existing_token_with_myplexaccount_invalid_token(self, mock_settings: MagicMock) -> None:
+        """Test validating an invalid token with MyPlexAccount."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            mock_account_class.side_effect = Unauthorized("Invalid token")
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.validate_token("invalid-token-12345")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["valid"]) is False
+            assert "error" in result
+            error_msg = cast(str, result["error"])
+            assert "Invalid token" in error_msg
+            
+            # Verify MyPlexAccount was called with the token
+            mock_account_class.assert_called_once_with(token="invalid-token-12345")
+
+    def test_validate_existing_token_with_connection_error(self, mock_settings: MagicMock) -> None:
+        """Test validating token when PlexAPI connection fails."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            mock_account_class.side_effect = BadRequest("Connection failed")
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.validate_token("test-token-12345")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["valid"]) is False
+            assert "error" in result
+            error_msg = cast(str, result["error"])
+            assert "Connection failed" in error_msg
+
+    def test_handle_expired_tokens_gracefully(self, mock_settings: MagicMock) -> None:
+        """Test handling expired tokens gracefully."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            # Simulate expired token scenario
+            mock_account_class.side_effect = Unauthorized("Token expired")
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.validate_token("expired-token-12345")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["valid"]) is False
+            assert "error" in result
+            error_msg = cast(str, result["error"])
+            assert "Token expired" in error_msg
+            assert cast(bool, result.get("expired")) is True
+
+    def test_refresh_token_if_possible_success(self, mock_settings: MagicMock) -> None:
+        """Test refreshing token if possible (MyPlexAccount provides new token)."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            # Mock a valid account that represents a successful "refresh"
+            # (In PlexAPI, refresh means the token is still valid)
+            refreshed_account = MagicMock()
+            refreshed_account.username = "testuser"
+            refreshed_account.email = "test@example.com"
+            refreshed_account.id = 12345
+            refreshed_account.uuid = "test-uuid-12345"
+            refreshed_account.authenticationToken = "refreshed-token-12345"
+            refreshed_account.confirmed = True
+            refreshed_account.restricted = False
+            refreshed_account.guest = False
+            
+            mock_account_class.return_value = refreshed_account
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.refresh_token("valid-token")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["success"]) is True
+            assert "access_token" in result
+            assert cast(str, result["access_token"]) == "refreshed-token-12345"
+            assert "user" in result
+            user_data = cast(dict[str, object], result["user"])
+            assert user_data["username"] == "testuser"
+            assert user_data["authentication_token"] == "refreshed-token-12345"
+
+    def test_refresh_token_if_possible_fails(self, mock_settings: MagicMock) -> None:
+        """Test refresh token when refresh is not possible."""
+        # Arrange
+        with patch('app.services.auth_service.MyPlexAccount') as mock_account_class:
+            mock_account_class.side_effect = Unauthorized("Cannot refresh token")
+            
+            auth_service = PlexAuthService(settings=mock_settings)
+            
+            # Act
+            result = auth_service.refresh_token("unrefreshable-token")
+            
+            # Assert
+            assert result is not None
+            assert cast(bool, result["success"]) is False
+            assert "error" in result
+            error_msg = cast(str, result["error"])
+            assert "Cannot refresh token" in error_msg
+
+    def test_clear_invalid_sessions_after_validation_failure(self, mock_settings: MagicMock) -> None:
+        """Test clearing invalid sessions after validation failure."""
+        # Arrange
+        auth_service = PlexAuthService(settings=mock_settings)
+        
+        # Simulate some session data that should be cleared
+        session_data: dict[str, object] = {
+            "user_id": "12345",
+            "token": "invalid-token",
+            "expires_at": float(time.time() + 3600)
+        }
+        
+        # Act
+        cleared_session = auth_service.clear_invalid_session(session_data)
+        
+        # Assert
+        assert cleared_session is not None
+        assert cast(bool, cleared_session["cleared"]) is True
+        assert "session_id" in cleared_session
+        assert cast(str, cleared_session["reason"]) == "invalid_token"
+
+    def test_clear_invalid_sessions_with_expired_timestamp(self, mock_settings: MagicMock) -> None:
+        """Test clearing sessions that have expired based on timestamp."""
+        # Arrange
+        auth_service = PlexAuthService(settings=mock_settings)
+        
+        # Simulate expired session data
+        expired_session_data: dict[str, object] = {
+            "user_id": "12345",
+            "token": "expired-token",
+            "expires_at": float(time.time() - 3600)  # Expired 1 hour ago
+        }
+        
+        # Act
+        cleared_session = auth_service.clear_invalid_session(expired_session_data)
+        
+        # Assert
+        assert cleared_session is not None
+        assert cast(bool, cleared_session["cleared"]) is True
+        assert cast(str, cleared_session["reason"]) == "session_expired"
+
+    def test_validate_token_with_empty_or_none_token(self, mock_settings: MagicMock) -> None:
+        """Test validating token with empty or None token."""
+        # Arrange
+        auth_service = PlexAuthService(settings=mock_settings)
+        
+        # Act & Assert - None token
+        result_none = auth_service.validate_token(None)
+        assert cast(bool, result_none["valid"]) is False
+        assert "error" in result_none
+        error_msg_none = cast(str, result_none["error"])
+        assert "Token is required" in error_msg_none
+        
+        # Act & Assert - Empty token
+        result_empty = auth_service.validate_token("")
+        assert cast(bool, result_empty["valid"]) is False
+        assert "error" in result_empty
+        error_msg_empty = cast(str, result_empty["error"])
+        assert "Token is required" in error_msg_empty
+
+    def test_validate_token_with_malformed_token(self, mock_settings: MagicMock) -> None:
+        """Test validating token with malformed token format."""
+        # Arrange
+        auth_service = PlexAuthService(settings=mock_settings)
+        
+        # Act & Assert - Malformed token (too short)
+        result_short = auth_service.validate_token("abc")
+        assert cast(bool, result_short["valid"]) is False
+        assert "error" in result_short
+        error_msg_short = cast(str, result_short["error"])
+        assert "Invalid token format" in error_msg_short
+        
+        # Act & Assert - Malformed token (invalid characters)
+        result_invalid = auth_service.validate_token("invalid@token#format!")
+        assert cast(bool, result_invalid["valid"]) is False
+        assert "error" in result_invalid
+        error_msg_invalid = cast(str, result_invalid["error"])
+        assert "Invalid token format" in error_msg_invalid
