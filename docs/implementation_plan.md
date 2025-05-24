@@ -116,18 +116,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `app/schemas/media_source_schemas.py`**
-  - [ ] **Analyze Requirements:** Define request/response schemas for media source operations
-  - [ ] **Feature: Media Source Operation Schemas**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Media sources list response schema
-      - [ ] Test case: Bulk disable request schema
-      - [ ] Test case: Individual source toggle request schema
-      - [ ] Test case: Operation success/error response schemas
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_media_source_schemas.py`
-    - [ ] **Implementation:** Create media source operation schemas
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/schemas/media_source_schemas.py`**
+  - [x] **Analyze Requirements:** Define request/response schemas for media source operations
+  - [x] **Feature: Media Source Operation Schemas**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Media sources list response schema
+      - [x] Test case: Bulk disable request schema
+      - [x] Test case: Individual source toggle request schema
+      - [x] Test case: Operation success/error response schemas
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_media_source_schemas.py`
+    - [x] **Implementation:** Create media source operation schemas
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 4: Authentication Service
 
