@@ -135,4 +135,73 @@ class PlexUser(BaseModel):
         populate_by_name=True,
         # Extra fields not allowed to maintain data minimization
         extra="forbid",
+    )
+
+
+class OnlineMediaSource(BaseModel):
+    """
+    Pydantic model representing a Plex online media source with privacy-focused design.
+    
+    This model represents individual online media sources (e.g., Spotify, TIDAL, YouTube)
+    that can be enabled or disabled for Plex scrobbling. The model is designed with
+    privacy-first principles, containing only essential source information.
+    
+    Fields are based on PlexAPI MyPlexAccount.onlineMediaSources() response structure
+    but filtered to include only necessary data for our application functionality.
+    """
+    
+    # Required fields for source identification
+    identifier: str = Field(
+        ...,
+        min_length=1,
+        description="Unique identifier for the online media source",
+        examples=["tidal", "spotify", "youtube", "lastfm"]
+    )
+    
+    title: str = Field(
+        ...,
+        min_length=1,
+        description="Display name of the online media source",
+        examples=["TIDAL", "Spotify", "YouTube", "Last.fm"]
+    )
+    
+    # Optional fields with privacy-focused defaults
+    scrobble_types: list[str] = Field(
+        default_factory=list,
+        description="Types of media that can be scrobbled (e.g., track, album, artist)",
+        examples=[["track"], ["track", "album"]]
+    )
+    
+    enabled: bool = Field(
+        default=False,
+        description="Whether the source is enabled for scrobbling (defaults to False for privacy)"
+    )
+    
+    @field_validator('identifier')
+    @classmethod
+    def validate_identifier(cls, v: str) -> str:
+        """Validate identifier is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError('Identifier cannot be empty or whitespace-only')
+        return v.strip()
+    
+    @field_validator('title')
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        """Validate title is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError('Title cannot be empty or whitespace-only')
+        return v.strip()
+    
+    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
+        # Ensure model is immutable after creation for security
+        frozen=True,
+        # Use enums by value for JSON serialization
+        use_enum_values=True,
+        # Validate assignment to catch errors early
+        validate_assignment=True,
+        # Populate by name to handle API field name variations
+        populate_by_name=True,
+        # Extra fields not allowed to maintain data minimization
+        extra="forbid",
     ) 

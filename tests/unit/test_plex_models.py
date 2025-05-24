@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from app.models.plex_models import PlexUser
+from app.models.plex_models import PlexUser, OnlineMediaSource
 
 
 class TestPlexUserModel:
@@ -217,4 +217,191 @@ class TestPlexUserModel:
         # The model should be configured to prevent modification after creation
         # This will be enforced by Pydantic's frozen=True configuration
         with pytest.raises((ValidationError, AttributeError)):
-            user.username = "modified_username" 
+            user.username = "modified_username"
+
+
+class TestOnlineMediaSourceModel:
+    """Test cases for OnlineMediaSource Pydantic model validation."""
+
+    def test_online_media_source_model_with_source_metadata(self) -> None:
+        """Test OnlineMediaSource model validation with valid source metadata."""
+        # This test should pass when model is implemented correctly
+        source = OnlineMediaSource(
+            identifier="tidal",
+            title="TIDAL",
+            scrobble_types=["track"],
+            enabled=True
+        )
+        
+        # Verify all fields are set correctly
+        assert source.identifier == "tidal"
+        assert source.title == "TIDAL"
+        assert source.scrobble_types == ["track"]
+        assert source.enabled is True
+
+    def test_online_media_source_type_validation(self) -> None:
+        """Test OnlineMediaSource model source type validation rules."""
+        # Test valid identifier formats
+        valid_identifiers = ["tidal", "spotify", "youtube", "lastfm", "musicbrainz"]
+        for identifier in valid_identifiers:
+            source = OnlineMediaSource(
+                identifier=identifier,
+                title=f"Test {identifier.title()}",
+                scrobble_types=["track"],
+                enabled=True
+            )
+            assert source.identifier == identifier
+        
+        # Test empty identifier
+        with pytest.raises(ValidationError) as exc_info:
+            _ = OnlineMediaSource(
+                identifier="",
+                title="Empty Identifier",
+                scrobble_types=["track"],
+                enabled=True
+            )
+        assert "identifier" in str(exc_info.value)
+        
+        # Test whitespace-only identifier
+        with pytest.raises(ValidationError) as exc_info:
+            _ = OnlineMediaSource(
+                identifier="   ",
+                title="Whitespace Identifier",
+                scrobble_types=["track"],
+                enabled=True
+            )
+        assert "identifier" in str(exc_info.value)
+
+    def test_online_media_source_enable_disable_status_handling(self) -> None:
+        """Test OnlineMediaSource model enable/disable status handling."""
+        # Test enabled source
+        enabled_source = OnlineMediaSource(
+            identifier="spotify",
+            title="Spotify",
+            scrobble_types=["track"],
+            enabled=True
+        )
+        assert enabled_source.enabled is True
+        
+        # Test disabled source
+        disabled_source = OnlineMediaSource(
+            identifier="youtube",
+            title="YouTube",
+            scrobble_types=["track"],
+            enabled=False
+        )
+        assert disabled_source.enabled is False
+        
+        # Test default enabled status (should default to False for privacy)
+        default_source = OnlineMediaSource(
+            identifier="lastfm",
+            title="Last.fm",
+            scrobble_types=["track"]
+        )
+        assert default_source.enabled is False
+
+    def test_online_media_source_identifier_validation(self) -> None:
+        """Test OnlineMediaSource identifier validation rules."""
+        # Test missing identifier
+        with pytest.raises(ValidationError) as exc_info:
+            invalid_data = {
+                "title": "Missing Identifier",
+                "scrobble_types": ["track"],
+                "enabled": True
+            }
+            _ = OnlineMediaSource(**invalid_data)  # pyright: ignore[reportArgumentType]
+        assert "identifier" in str(exc_info.value)
+        
+        # Test missing title
+        with pytest.raises(ValidationError) as exc_info:
+            invalid_data = {
+                "identifier": "test",
+                "scrobble_types": ["track"],
+                "enabled": True
+            }
+            _ = OnlineMediaSource(**invalid_data)  # pyright: ignore[reportArgumentType]
+        assert "title" in str(exc_info.value)
+        
+        # Test valid minimal source
+        minimal_source = OnlineMediaSource(
+            identifier="minimal",
+            title="Minimal Source",
+            scrobble_types=["track"]
+        )
+        assert minimal_source.identifier == "minimal"
+        assert minimal_source.title == "Minimal Source"
+        assert minimal_source.scrobble_types == ["track"]
+        assert minimal_source.enabled is False
+
+    def test_online_media_source_scrobble_types_validation(self) -> None:
+        """Test OnlineMediaSource scrobble types validation rules."""
+        # Test valid scrobble types
+        valid_types = [["track"], ["album"], ["artist"], ["track", "album"], ["track", "album", "artist"]]
+        for scrobble_types in valid_types:
+            source = OnlineMediaSource(
+                identifier="test",
+                title="Test Source",
+                scrobble_types=scrobble_types,
+                enabled=True
+            )
+            assert source.scrobble_types == scrobble_types
+        
+        # Test empty scrobble types (should be allowed but default to empty list)
+        source_no_scrobble = OnlineMediaSource(
+            identifier="test",
+            title="Test Source",
+            scrobble_types=[],
+            enabled=True
+        )
+        assert source_no_scrobble.scrobble_types == []
+        
+        # Test default scrobble types
+        source_default = OnlineMediaSource(
+            identifier="test",
+            title="Test Source"
+        )
+        assert source_default.scrobble_types == []
+
+    def test_online_media_source_privacy_focused_data_filtering(self) -> None:
+        """Test OnlineMediaSource model filters data appropriately for privacy."""
+        source = OnlineMediaSource(
+            identifier="spotify",
+            title="Spotify",
+            scrobble_types=["track"],
+            enabled=True
+        )
+        
+        # Verify we only store essential data (privacy-first approach)
+        required_fields = ["identifier", "title", "scrobble_types", "enabled"]
+        for field in required_fields:
+            assert hasattr(source, field)
+        
+        # Should not contain sensitive personal information or tracking data
+        assert not hasattr(source, "user_data")
+        assert not hasattr(source, "personal_info")
+        assert not hasattr(source, "access_token")
+
+    def test_online_media_source_model_immutability(self) -> None:
+        """Test OnlineMediaSource model configuration for immutability and security."""
+        source = OnlineMediaSource(
+            identifier="test",
+            title="Test Source",
+            scrobble_types=["track"],
+            enabled=True
+        )
+        
+        # The model should be configured to prevent modification after creation
+        # This will be enforced by Pydantic's frozen=True configuration
+        with pytest.raises((ValidationError, AttributeError)):
+            source.enabled = False
+
+    def test_online_media_source_optional_fields_defaults(self) -> None:
+        """Test OnlineMediaSource model with optional fields having proper defaults."""
+        source = OnlineMediaSource(
+            identifier="test",
+            title="Test Source"
+        )
+        
+        # Check optional fields have appropriate defaults for privacy/security
+        assert source.scrobble_types == []
+        assert source.enabled is False  # Should default to False for privacy 
