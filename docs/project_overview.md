@@ -31,13 +31,13 @@ A privacy-first web application that allows Plex users to authenticate via OAuth
 ## PlexAPI Integration Details
 
 ### Authentication Flow
-- Use `plexapi.myplex.MyPlexPinLogin` for OAuth flow initiation
+- Use `plexapi.myplex.MyPlexPinLogin(oauth=True)` for OAuth flow initiation with direct Plex account login
 - Implement `MyPlexAccount` for authenticated user operations
 - Leverage `MyPlexAccount.onlineMediaSources()` for media source management
 - Use `AccountOptOut.optOut()` for bulk disable functionality
 
 ### Key PlexAPI Classes
-- `MyPlexPinLogin`: OAuth PIN-based authentication
+- `MyPlexPinLogin`: OAuth 2.0 authentication (always use oauth=True for better UX)
 - `MyPlexAccount`: Authenticated user account operations
 - `AccountOptOut`: Online media sources opt-out management
 - `PlexServer`: Server connection and operations (if needed)
@@ -83,15 +83,15 @@ A privacy-first web application that allows Plex users to authenticate via OAuth
 
 #### `app/services/auth_service.py`
 **Purpose**: OAuth authentication flow management
-- Plex OAuth 2.0 implementation using MyPlexPinLogin
+- Plex OAuth 2.0 implementation using MyPlexPinLogin(oauth=True) for direct login
 - Token validation and refresh mechanisms using MyPlexAccount
 - Session management with secure cookie handling
 - Type-safe authentication state management
 
 #### `app/api/routes/auth.py`
 **Purpose**: Authentication endpoint definitions
-- OAuth initiation endpoint (`/auth/login`) using MyPlexPinLogin
-- OAuth callback handler (`/auth/callback`) with PIN verification
+- OAuth initiation endpoint (`/auth/login`) using MyPlexPinLogin(oauth=True)
+- OAuth callback handler (`/auth/callback`) with authorization code verification
 - Token refresh endpoint (`/auth/refresh`) with MyPlexAccount
 - Logout endpoint with session cleanup
 
@@ -265,7 +265,7 @@ A privacy-first web application that allows Plex users to authenticate via OAuth
 ## Key Features Implementation
 
 ### 1. Plex OAuth Authentication
-- Uses PlexAPI's `MyPlexPinLogin` class with PIN-based OAuth
+- Uses PlexAPI's `MyPlexPinLogin(oauth=True)` class for direct Plex account login
 - Implements secure token storage using MyPlexAccount methods
 - Provides seamless authentication experience with proper error handling
 

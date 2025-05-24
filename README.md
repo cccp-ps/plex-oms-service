@@ -11,7 +11,7 @@ This application allows Plex users to authenticate via OAuth and manage their On
 - **Backend**: Python 3.13+ with FastAPI 0.104+
 - **Plex Integration**: PlexAPI 4.15+ for OAuth and MyPlex API
 - **Frontend**: TypeScript 5.3+ with React 18.2+ and TailwindCSS v4.0+
-- **Authentication**: Plex OAuth 2.0 via MyPlexPinLogin
+- **Authentication**: Plex OAuth 2.0 via MyPlexPinLogin with direct account login
 - **Testing**: pytest 7.4+ with pytest-asyncio
 - **Type Checking**: basedpyright for Python, strict TypeScript config
 

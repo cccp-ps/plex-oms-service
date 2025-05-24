@@ -61,14 +61,15 @@ def mock_plex_pin_login(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Mock MyPlexPinLogin for OAuth flow testing."""
     mock_pin_login = MagicMock(spec=MyPlexPinLogin)
     
-    # Configure the mock
-    mock_pin_login.pin = "1234"
+    # Configure the mock for OAuth mode
+    mock_pin_login.pin = "1234"  # Still available but not used in OAuth mode
     mock_pin_login.code = "test-code-12345"
     mock_pin_login.finished = False
     mock_pin_login.username = None
     mock_pin_login.token = None
     
-    # Mock methods
+    # Mock OAuth-specific methods
+    mock_pin_login.oauthUrl = MagicMock(return_value="https://app.plex.tv/auth/#!?clientID=test&code=test-code-12345")
     mock_pin_login.run = MagicMock()
     mock_pin_login.waitForLogin = MagicMock()
     mock_pin_login.reload = MagicMock()
@@ -152,7 +153,7 @@ def mock_plex_server(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 @pytest.fixture
 def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: MagicMock) -> dict[str, object]:
     """Mock successful OAuth flow from start to finish."""
-    # Configure successful PIN login
+    # Configure successful OAuth login
     mock_plex_pin_login.waitForLogin.return_value = True  # pyright: ignore[reportAny]
     mock_plex_pin_login.finished = True
     mock_plex_pin_login.username = "testuser"
@@ -161,7 +162,7 @@ def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: M
     return {
         "pin_login": mock_plex_pin_login,
         "account": mock_plex_account,
-        "pin": "1234",
+        "oauth_url": "https://app.plex.tv/auth/#!?clientID=test&code=test-code-12345",
         "code": "test-code-12345",
         "token": "test-token-success"
     }
@@ -170,15 +171,15 @@ def mock_oauth_flow_success(mock_plex_pin_login: MagicMock, mock_plex_account: M
 @pytest.fixture
 def mock_oauth_flow_failure(mock_plex_pin_login: MagicMock) -> dict[str, object]:
     """Mock failed OAuth flow scenarios."""
-    # Configure failed PIN login
-    mock_plex_pin_login.waitForLogin.side_effect = Unauthorized("Invalid PIN")  # pyright: ignore[reportAny]
+    # Configure failed OAuth login
+    mock_plex_pin_login.waitForLogin.side_effect = Unauthorized("Invalid authorization code")  # pyright: ignore[reportAny]
     mock_plex_pin_login.finished = False
     mock_plex_pin_login.username = None
     mock_plex_pin_login.token = None
     
     return {
         "pin_login": mock_plex_pin_login,
-        "error": "Invalid PIN"
+        "error": "Invalid authorization code"
     }
 
 

@@ -1,461 +1,637 @@
 # Plex Online Media Sources Manager - Implementation Plan
 
-## Overview
-This implementation plan follows strict Test-Driven Development (TDD) methodology, ensuring robust, secure, and privacy-first implementation of the Plex Online Media Sources Manager.
-
-## Phase 1: Project Setup & Configuration
-
-### 1.1 Python Environment Setup
-- [x] Initialize Python 3.13+ environment using `uv`
-- [x] Create virtual environment: `uv venv`
-- [x] Activate environment and verify Python version
-
-### 1.2 Backend Project Structure
-- [x] **Create `pyproject.toml`**
-  - Configure uv-based dependency management
-  - Set up development dependencies (pytest, basedpyright, ruff)
-  - Configure tool settings for linting and type checking
-  - Define project metadata and entry points
-
-- [x] **Create basic project directories**
-  ```
-  app/
-  ├── __init__.py
-  ├── core/
-  ├── models/
-  ├── schemas/
-  ├── services/
-  ├── api/
-  │   └── routes/
-  ├── middleware/
-  └── utils/
-  tests/
-  ├── unit/
-  ├── integration/
-  └── fixtures/
-  ```
-
-### 1.3 Frontend Project Structure
-- [x] **Create `frontend/package.json`**
-  - Configure React 18.2+, TypeScript 5.3+, TailwindCSS v4.0+
-  - Set up Vite build tooling with HMR
-  - Configure ESLint with strict TypeScript rules
-  - Include testing dependencies (Vitest, React Testing Library)
-
-- [x] **Create `frontend/tsconfig.json`**
-  - Enable strict TypeScript mode
-  - Configure path mapping for clean imports
-  - Set up React and DOM type definitions
-
-- [x] **Create `frontend/tailwind.config.ts`**
-  - Configure TailwindCSS v4+ with design tokens
-  - Set up dark mode support with CSS variables
-  - Define custom component classes
-
-- [x] **Create `frontend/vite.config.ts`**
-  - Configure development server with HMR
-  - Set up build optimization and code splitting
-  - Configure environment variable handling
-
-## Phase 2: Core Backend Development (TDD)
-
-### 2.1 Configuration & Models (TDD)
-
-#### Tests First
-- [x] **Create `tests/conftest.py`**
-  - Set up pytest fixtures for FastAPI testing
-  - Configure async test client
-  - Create mock Plex API fixtures
-  - Set up temporary database fixtures
-
-- [ ] **Create `tests/unit/test_config.py`**
-  - Test environment variable loading
-  - Test configuration validation
-  - Test security settings validation
-  - Test OAuth configuration
-
-- [ ] **Create `tests/unit/test_plex_models.py`**
-  - Test Pydantic model validation
-  - Test serialization/deserialization
-  - Test field validators
-  - Test error handling for invalid data
-
-#### Implementation
-- [ ] **Create `app/config.py`**
-  - Implement Pydantic BaseSettings for configuration
-  - Define environment variables for OAuth (PLEX_CLIENT_ID, PLEX_CLIENT_SECRET)
-  - Configure CORS origins and security settings
-  - Add validation for required configuration values
-
-- [ ] **Create `app/models/plex_models.py`**
-  - Implement PlexUser model with proper field validation
-  - Create OnlineMediaSource model with source metadata
-  - Define OAuth token models with expiration handling
-  - Add response models for API endpoints
-
-- [ ] **Create `app/schemas/`** (New - Improvement)
-  - `auth_schemas.py` - Request/response schemas for authentication
-  - `media_source_schemas.py` - Schemas for media source operations
-  - Separate concerns between data models and API schemas
-
-### 2.2 Authentication Service (TDD)
-
-#### Tests First
-- [ ] **Create `tests/unit/test_auth_service.py`**
-  - Test MyPlexPinLogin integration
-  - Test OAuth flow initiation and completion
-  - Test token validation and refresh
-  - Test error scenarios (invalid PIN, expired tokens)
-  - Mock PlexAPI calls using pytest-mock
-
-#### Implementation
-- [ ] **Create `app/services/auth_service.py`**
-  - Implement PlexAuthService class using MyPlexPinLogin
-  - Create methods for OAuth flow initiation
-  - Implement token validation using MyPlexAccount
-  - Add secure session management
-  - Handle PlexAPI exceptions gracefully
-
-### 2.3 Plex API Service (TDD)
-
-#### Tests First
-- [ ] **Create `tests/unit/test_plex_service.py`**
-  - Test media sources retrieval using mocked onlineMediaSources()
-  - Test bulk disable functionality with AccountOptOut mocks
-  - Test individual source management
-  - Test API rate limiting and retry logic
-  - Mock external PlexAPI calls
-
-#### Implementation
-- [ ] **Create `app/services/plex_service.py`**
-  - Implement PlexMediaSourceService class
-  - Use MyPlexAccount.onlineMediaSources() for source listing
-  - Implement bulk operations using AccountOptOut.optOut()
-  - Add retry logic with exponential backoff
-  - Handle PlexAPI rate limits and errors
-
-### 2.4 API Routes (TDD)
-
-#### Tests First
-- [ ] **Create `tests/integration/test_auth_routes.py`**
-  - Test OAuth initiation endpoint
-  - Test OAuth callback handling
-  - Test token refresh endpoint
-  - Test logout functionality
-  - Test security measures (CSRF, rate limiting)
-
-- [ ] **Create `tests/integration/test_media_source_routes.py`**
-  - Test media sources listing endpoint
-  - Test bulk disable endpoint
-  - Test individual source toggle
-  - Test error responses and status codes
-
-#### Implementation
-- [ ] **Create `app/api/routes/auth.py`**
-  - Implement `/auth/login` endpoint using MyPlexPinLogin
-  - Create `/auth/callback` for OAuth completion
-  - Add `/auth/refresh` for token renewal
-  - Implement `/auth/logout` with session cleanup
-
-- [ ] **Create `app/api/routes/media_sources.py`**
-  - Implement `GET /api/media-sources` for listing
-  - Create `POST /api/media-sources/disable-all` for bulk operations
-  - Add `PATCH /api/media-sources/{source_id}` for individual control
-  - Ensure privacy-compliant data handling
-
-### 2.5 Security & Middleware (TDD)
-
-#### Tests First
-- [ ] **Create `tests/unit/test_security_middleware.py`**
-  - Test CSRF protection
-  - Test rate limiting functionality
-  - Test security headers injection
-  - Test request validation and sanitization
-
-#### Implementation
-- [ ] **Create `app/middleware/security.py`**
-  - Implement CSRF protection middleware
-  - Add rate limiting using slowapi
-  - Create security headers injection
-  - Implement request validation
-
-- [ ] **Create `app/utils/exceptions.py`**
-  - Define custom exception classes for PlexAPI errors
-  - Create authentication-specific exceptions
-  - Implement global exception handlers
-  - Add user-friendly error messages
-
-- [ ] **Create `app/utils/validators.py`**
-  - Implement OAuth state validation
-  - Add Plex token format validation
-  - Create request payload sanitization
-  - Add security-focused validation rules
-
-### 2.6 Main Application (TDD)
-
-#### Tests First
-- [ ] **Create `tests/integration/test_main.py`**
-  - Test FastAPI application startup
-  - Test middleware integration
-  - Test route registration
-  - Test CORS configuration
-
-#### Implementation
-- [ ] **Create `app/main.py`**
-  - Initialize FastAPI application with security settings
-  - Configure CORS middleware
-  - Register route modules
-  - Set up exception handlers and logging
-
----
-
-## Phase 3: Frontend Development (TDD)
-
-### 3.1 Core Infrastructure & Types
-
-#### Tests First
-- [ ] **Create `frontend/src/__tests__/setup.ts`**
-  - Configure testing environment
-  - Set up MSW (Mock Service Worker) for API mocking
-  - Create test utilities and custom render functions
-
-#### Implementation
-- [ ] **Create `frontend/src/types/index.ts`**
-  - Define TypeScript interfaces for API responses
-  - Create user and media source type definitions
-  - Add authentication state types
-  - Define component prop interfaces
-
-- [ ] **Create `frontend/src/utils/constants.ts`**
-  - Define API endpoint URLs with environment handling
-  - Set OAuth configuration constants
-  - Add UI text constants for i18n readiness
-  - Create feature flag enums
-
-### 3.2 API Service Layer (TDD)
-
-#### Tests First
-- [ ] **Create `frontend/src/services/__tests__/api.test.ts`**
-  - Test HTTP client functionality
-  - Test authentication token injection
-  - Test error handling and retry mechanisms
-  - Mock fetch calls and responses
-
-#### Implementation
-- [ ] **Create `frontend/src/services/api.ts`**
-  - Implement type-safe HTTP client using fetch
-  - Add authentication token injection middleware
-  - Create request/response transformation with zod validation
-  - Implement error handling with exponential backoff
-
-### 3.3 React Hooks & State Management (TDD)
-
-#### Tests First
-- [ ] **Create `frontend/src/hooks/__tests__/useAuth.test.tsx`**
-  - Test authentication state management
-  - Test login/logout functionality
-  - Test token refresh handling
-  - Test error scenarios
-
-- [ ] **Create `frontend/src/hooks/__tests__/useMediaSources.test.tsx`**
-  - Test media sources data fetching
-  - Test optimistic updates
-  - Test error handling and retry logic
-  - Test cache invalidation
-
-#### Implementation
-- [ ] **Create `frontend/src/contexts/`** (New - Improvement)
-  - `AuthContext.tsx` - Authentication context provider
-  - `ThemeContext.tsx` - Theme management context
-
-- [ ] **Create `frontend/src/hooks/useAuth.tsx`**
-  - Implement type-safe authentication state management
-  - Add secure token storage with localStorage/sessionStorage
-  - Create authentication methods with error handling
-  - Implement automatic token refresh
-
-- [ ] **Create `frontend/src/hooks/useMediaSources.tsx`**
-  - Integrate React Query for data management
-  - Implement optimistic updates for better UX
-  - Add error handling with retry logic
-  - Create type-safe API integration
-
-### 3.4 UI Components (TDD)
-
-#### Tests First
-- [ ] **Create `frontend/src/components/__tests__/AuthButton.test.tsx`**
-  - Test OAuth flow initiation
-  - Test loading states and error handling
-  - Test accessibility compliance
-  - Test user interaction scenarios
-
-- [ ] **Create `frontend/src/components/__tests__/MediaSourcesList.test.tsx`**
-  - Test media sources rendering
-  - Test individual toggle functionality
-  - Test loading and error states
-  - Test accessibility features
-
-- [ ] **Create `frontend/src/components/__tests__/BulkDisableButton.test.tsx`**
-  - Test bulk disable functionality
-  - Test confirmation dialog
-  - Test progress indication
-  - Test error feedback
-
-#### Implementation
-- [ ] **Create `frontend/src/components/AuthButton.tsx`**
-  - Implement Plex OAuth authentication button
-  - Add loading states with accessible indicators
-  - Create user authentication status display
-  - Apply responsive design with TailwindCSS v4
-
-- [ ] **Create `frontend/src/components/MediaSourcesList.tsx`**
-  - Implement virtualized list for performance
-  - Add individual toggle controls with optimistic updates
-  - Create loading skeletons and error states
-  - Ensure accessibility compliance (ARIA labels, keyboard navigation)
-
-- [ ] **Create `frontend/src/components/BulkDisableButton.tsx`**
-  - Implement prominent "Disable All" functionality
-  - Add confirmation dialog with clear messaging
-  - Create progress indication for bulk operations
-  - Implement success/error feedback with toast notifications
-
-### 3.5 Main Application Component (TDD)
-
-#### Tests First
-- [ ] **Create `frontend/src/__tests__/App.test.tsx`**
-  - Test application routing
-  - Test authentication flow integration
-  - Test error boundary functionality
-  - Test responsive design
-
-#### Implementation
-- [ ] **Create `frontend/src/App.tsx`**
-  - Set up React Router v6 for navigation
-  - Integrate authentication context provider
-  - Implement error boundary with proper error handling
-  - Configure global state management with Zustand (if needed)
-
----
-
-## Phase 4: Integration & Security
-
-### 4.1 End-to-End Integration Testing
-- [ ] **Create `tests/e2e/test_complete_flow.py`**
-  - Test complete OAuth authentication flow
-  - Test media sources management end-to-end
-  - Test error scenarios and recovery
-  - Test security measures integration
-
-### 4.2 Security Hardening
-- [ ] **Review and enhance security middleware**
-  - Implement Content Security Policy (CSP)
-  - Add HSTS headers for HTTPS enforcement
-  - Configure secure cookie settings
-  - Add request rate limiting and throttling
-
-- [ ] **Create security documentation**
-  - Document authentication flow security
-  - Create privacy policy compliance notes
-  - Document data handling practices
-  - Add security best practices guide
-
-### 4.3 Performance Optimization
-- [ ] **Backend performance**
-  - Implement connection pooling for PlexAPI
-  - Add request caching where appropriate
-  - Optimize database queries (if using database)
-  - Add monitoring and logging
-
-- [ ] **Frontend performance**
-  - Implement code splitting for route-based loading
-  - Add component lazy loading
-  - Optimize bundle size with tree shaking
-  - Implement virtual scrolling for large lists
-
----
-
-## Phase 5: Testing & Quality Assurance
-
-### 5.1 Test Coverage & Quality
-- [ ] **Run comprehensive test suite**
-  - Ensure 90% backend code coverage
-  - Achieve 85% API endpoint coverage
-  - Maintain 80% frontend component coverage
-  - Verify 100% authentication module coverage
-
-- [ ] **Type checking and linting**
-  - Run `uvx basedpyright` for Python type checking
-  - Execute TypeScript strict mode compilation
-  - Run ruff for Python code quality
-  - Execute ESLint for TypeScript/React code quality
-
-### 5.2 Security Testing
-- [ ] **Security vulnerability assessment**
-  - Test OAuth flow for security vulnerabilities
-  - Verify CSRF protection effectiveness
-  - Test rate limiting and abuse prevention
-  - Validate input sanitization and validation
-
-- [ ] **Privacy compliance verification**
-  - Verify minimal data collection practices
-  - Test data retention and deletion
-  - Validate GDPR compliance measures
-  - Review cookie and session handling
-
-### 5.3 User Acceptance Testing
-- [ ] **Manual testing scenarios**
-  - Test complete user journey from login to media source management
-  - Verify error handling and user feedback
-  - Test accessibility features with screen readers
-  - Validate responsive design across devices
-
----
-
-## Phase 6: Deployment & Documentation
-
-### 6.1 Deployment Configuration
-- [ ] **Create deployment scripts**
-  - `scripts/deploy.sh` - Production deployment script
-  - `scripts/health-check.sh` - Application health verification
-  - Configure environment-specific settings
-
-- [ ] **Create Docker configuration (optional)**
-  - `Dockerfile` for backend containerization
-  - `docker-compose.yml` for local development
-  - Configure production-ready container settings
-
-### 6.2 Documentation
-- [ ] **Create comprehensive README.md**
-  - Installation and setup instructions
-  - Development workflow documentation
-  - API documentation with examples
-  - Security and privacy information
-
-- [ ] **Create developer documentation**
-  - Architecture overview and decisions
-  - API reference documentation
-  - Testing strategy and guidelines
-  - Contribution guidelines
-
-- [ ] **Create user documentation**
-  - User guide for media source management
-  - Privacy policy and data handling
-  - Troubleshooting guide
-  - FAQ section
-
-### 6.3 Monitoring & Maintenance
-- [ ] **Set up application monitoring**
-  - Health check endpoints
-  - Error tracking and alerting
-  - Performance monitoring
-  - Security event logging
-
-- [ ] **Create maintenance procedures**
-  - Backup and recovery procedures
-  - Update and patch management
-  - Security incident response plan
-  - User support procedures
+## Introduction
+
+This document outlines a comprehensive, step-by-step development plan for the Plex Online Media Sources Manager. The plan strictly adheres to Test-Driven Development (TDD) principles and follows a privacy-first approach for managing Plex online media sources.
+
+### Project Background
+
+The Plex Online Media Sources Manager is a FastAPI-based web application with a React frontend that allows users to manage their Plex online media sources through a secure OAuth authentication flow. The application provides functionality to view, toggle, and bulk disable online media sources while maintaining strict privacy and security standards.
+
+### Development Approach
+
+The development follows these key principles:
+
+1. **Test-Driven Development (TDD)**: For each component, we will:
+   - Analyze requirements and existing PlexAPI functionality
+   - Define test cases based on requirements
+   - Write failing tests
+   - Implement the functionality to make tests pass
+   - Refactor the code for optimization
+
+2. **Modular Design**: The application is structured into logical modules with clear responsibilities:
+   - Configuration management
+   - Authentication service using PlexAPI
+   - Media source management
+   - API routes and middleware
+   - Frontend components and state management
+
+3. **Security-First Architecture**: Every component considers security implications with proper OAuth flow, CSRF protection, and minimal data collection.
+
+The plan is organized into logical phases that build upon each other, ensuring a systematic approach to development.
+
+## Phase 1: Project Setup and Initial Structure
+
+- [x] **Create Basic Project Structure**
+  - [x] Create main package directory structure
+  - [x] Create empty `__init__.py` files in all directories
+  - [x] Set up `pyproject.toml` with basic metadata and dependencies
+  - [x] Create `.gitignore` file
+  - [x] Create basic `README.md` with project description
+
+- [x] **Set Up Testing Framework**
+  - [x] Create test directory structure mirroring the package structure
+  - [x] Set up `conftest.py` with basic test fixtures
+  - [x] Configure pytest in `pyproject.toml`
+  - [x] Create a simple test to verify the testing setup works
+
+- [x] **Frontend Project Structure**
+  - [x] Create `frontend/package.json` with React 18.2+, TypeScript 5.3+, TailwindCSS v4.0+
+  - [x] Create `frontend/tsconfig.json` with strict TypeScript mode
+  - [x] Create `frontend/tailwind.config.ts` with design tokens
+  - [x] Create `frontend/vite.config.ts` with development server configuration
+
+## Phase 2: Configuration Management
+
+- [ ] **Module: `app/config.py`**
+  - [x] **Analyze Requirements:** Review FastAPI configuration needs and PlexAPI OAuth requirements
+  - [x] **Feature: Environment Configuration**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Load environment variables (PLEX_CLIENT_ID, PLEX_CLIENT_SECRET)
+      - [x] Test case: Validate required configuration values
+      - [x] Test case: Handle missing environment variables
+      - [x] Test case: CORS origins configuration validation
+      - [x] Test case: Security settings validation
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_config.py`
+    - [x] **Implementation:** Create Pydantic BaseSettings configuration class
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: OAuth Configuration**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: OAuth client ID and secret validation
+      - [ ] Test case: Redirect URI configuration
+      - [ ] Test case: OAuth scopes validation
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_config.py`
+    - [ ] **Implementation:** Add OAuth-specific configuration fields
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 3: Pydantic Models and Schemas
+
+- [ ] **Module: `app/models/plex_models.py`**
+  - [ ] **Analyze PlexAPI:** Review PlexAPI response structures for users and media sources
+  - [ ] **Feature: Plex User Model**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: PlexUser model validation with valid data
+      - [ ] Test case: Handle missing required fields
+      - [ ] Test case: Username and email validation
+      - [ ] Test case: OAuth token model with expiration handling
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_models.py`
+    - [ ] **Implementation:** Create PlexUser Pydantic model
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Online Media Source Model**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: OnlineMediaSource model with source metadata
+      - [ ] Test case: Source type validation
+      - [ ] Test case: Enable/disable status handling
+      - [ ] Test case: Source identifier validation
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_models.py`
+    - [ ] **Implementation:** Create OnlineMediaSource Pydantic model
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `app/schemas/auth_schemas.py`**
+  - [ ] **Analyze Requirements:** Define request/response schemas for authentication endpoints
+  - [ ] **Feature: Authentication Request/Response Schemas**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: OAuth initiation request schema
+      - [ ] Test case: OAuth callback response schema
+      - [ ] Test case: Token refresh request schema
+      - [ ] Test case: Authentication error response schema
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_schemas.py`
+    - [ ] **Implementation:** Create authentication-specific Pydantic schemas
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `app/schemas/media_source_schemas.py`**
+  - [ ] **Analyze Requirements:** Define request/response schemas for media source operations
+  - [ ] **Feature: Media Source Operation Schemas**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Media sources list response schema
+      - [ ] Test case: Bulk disable request schema
+      - [ ] Test case: Individual source toggle request schema
+      - [ ] Test case: Operation success/error response schemas
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_media_source_schemas.py`
+    - [ ] **Implementation:** Create media source operation schemas
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 4: Authentication Service
+
+- [ ] **Module: `app/services/auth_service.py`**
+  - [ ] **Analyze PlexAPI:** Review MyPlexPinLogin OAuth functionality and MyPlexAccount authentication
+  - [ ] **Feature: OAuth Flow Initiation**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Initiate OAuth flow using MyPlexPinLogin(oauth=True)
+      - [ ] Test case: Generate secure state parameter
+      - [ ] Test case: Handle PlexAPI connection errors
+      - [ ] Test case: Return OAuth URL for direct Plex account login
+      - [ ] Test case: Ensure oauth=True is always used for better user experience
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_auth_service.py`
+    - [ ] **Implementation:** Create PlexAuthService class with OAuth initiation (always use oauth=True)
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: OAuth Flow Completion**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Complete OAuth flow with valid authorization code
+      - [ ] Test case: Validate state parameter for CSRF protection
+      - [ ] Test case: Retrieve MyPlexAccount with OAuth token
+      - [ ] Test case: Handle invalid authorization code scenarios
+      - [ ] Test case: Handle expired OAuth session scenarios
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
+    - [ ] **Implementation:** Add OAuth completion methods with code verification
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Token Validation and Refresh**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Validate existing token with MyPlexAccount
+      - [ ] Test case: Handle expired tokens
+      - [ ] Test case: Refresh token if possible
+      - [ ] Test case: Clear invalid sessions
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_auth_service.py`
+    - [ ] **Implementation:** Add token validation and refresh methods
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 5: Plex API Service
+
+- [ ] **Module: `app/services/plex_service.py`**
+  - [ ] **Analyze PlexAPI:** Review MyPlexAccount.onlineMediaSources() and AccountOptOut functionality
+  - [ ] **Feature: Media Sources Retrieval**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Retrieve online media sources using MyPlexAccount
+      - [ ] Test case: Parse and transform source data
+      - [ ] Test case: Handle empty sources list
+      - [ ] Test case: Handle PlexAPI connection errors
+      - [ ] Test case: Apply proper data filtering for privacy
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_service.py`
+    - [ ] **Implementation:** Create PlexMediaSourceService class
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Individual Source Management**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Toggle individual source enable/disable status
+      - [ ] Test case: Validate source exists before operation
+      - [ ] Test case: Handle PlexAPI operation errors
+      - [ ] Test case: Return updated source status
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
+    - [ ] **Implementation:** Add individual source management methods
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Bulk Operations**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Bulk disable all sources using AccountOptOut
+      - [ ] Test case: Handle partial failures in bulk operations
+      - [ ] Test case: Return operation summary with success/failure counts
+      - [ ] Test case: Implement proper retry logic with exponential backoff
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
+    - [ ] **Implementation:** Add bulk operations with AccountOptOut.optOut()
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Rate Limiting and Error Handling**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Handle PlexAPI rate limits with proper backoff
+      - [ ] Test case: Retry failed requests with exponential backoff
+      - [ ] Test case: Handle network timeout errors
+      - [ ] Test case: Log errors appropriately without exposing sensitive data
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
+    - [ ] **Implementation:** Add robust error handling and retry logic
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 6: Security Middleware and Utilities
+
+- [ ] **Module: `app/middleware/security.py`**
+  - [ ] **Analyze Requirements:** Review security requirements for OAuth and API protection
+  - [ ] **Feature: CSRF Protection**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Generate and validate CSRF tokens
+      - [ ] Test case: Reject requests with invalid CSRF tokens
+      - [ ] Test case: Handle CSRF token expiration
+      - [ ] Test case: Integrate with OAuth state parameter
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_security_middleware.py`
+    - [ ] **Implementation:** Create CSRF protection middleware
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Rate Limiting**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Implement per-IP rate limiting using slowapi
+      - [ ] Test case: Different limits for different endpoints
+      - [ ] Test case: Handle rate limit exceeded responses
+      - [ ] Test case: Reset rate limits after time window
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
+    - [ ] **Implementation:** Add rate limiting middleware
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Security Headers**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Inject security headers (HSTS, CSP, etc.)
+      - [ ] Test case: Configure proper CORS headers
+      - [ ] Test case: Set secure cookie attributes
+      - [ ] Test case: Remove sensitive server information
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
+    - [ ] **Implementation:** Add security headers middleware
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `app/utils/exceptions.py`**
+  - [ ] **Analyze Requirements:** Define custom exceptions for PlexAPI and authentication errors
+  - [ ] **Feature: Custom Exception Classes**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: PlexAPI connection exceptions
+      - [ ] Test case: Authentication failure exceptions
+      - [ ] Test case: Authorization (permission) exceptions
+      - [ ] Test case: Rate limiting exceptions
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_exceptions.py`
+    - [ ] **Implementation:** Create custom exception hierarchy
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Global Exception Handlers**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Handle PlexAPI exceptions with user-friendly messages
+      - [ ] Test case: Handle authentication exceptions with proper HTTP status
+      - [ ] Test case: Handle validation exceptions
+      - [ ] Test case: Log errors without exposing sensitive information
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_exceptions.py`
+    - [ ] **Implementation:** Create FastAPI exception handlers
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `app/utils/validators.py`**
+  - [ ] **Analyze Requirements:** Define validation utilities for OAuth and request data
+  - [ ] **Feature: OAuth Validation**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Validate OAuth state parameter
+      - [ ] Test case: Validate Plex token format
+      - [ ] Test case: Validate redirect URIs
+      - [ ] Test case: Sanitize callback parameters
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_validators.py`
+    - [ ] **Implementation:** Create OAuth validation functions
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 7: API Routes
+
+- [ ] **Module: `app/api/routes/auth.py`**
+  - [ ] **Analyze Requirements:** Define authentication endpoints for OAuth flow
+  - [ ] **Feature: OAuth Initiation Endpoint**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: POST /auth/login initiates OAuth with MyPlexPinLogin(oauth=True)
+      - [ ] Test case: Return OAuth URL for direct Plex account login
+      - [ ] Test case: Generate and store secure state parameter
+      - [ ] Test case: Handle PlexAPI connection errors
+      - [ ] Test case: Apply rate limiting to prevent abuse
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_auth_routes.py`
+    - [ ] **Implementation:** Create OAuth initiation endpoint
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: OAuth Callback Endpoint**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: POST /auth/callback completes OAuth flow
+      - [ ] Test case: Validate authorization code and state parameters
+      - [ ] Test case: Create secure session with HTTPOnly cookies
+      - [ ] Test case: Return user information and success status
+      - [ ] Test case: Handle invalid authorization code or expired session
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
+    - [ ] **Implementation:** Create OAuth callback endpoint
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Session Management Endpoints**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: GET /auth/me returns current user information
+      - [ ] Test case: POST /auth/refresh refreshes authentication token
+      - [ ] Test case: POST /auth/logout clears session and cookies
+      - [ ] Test case: Handle unauthenticated requests appropriately
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
+    - [ ] **Implementation:** Create session management endpoints
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `app/api/routes/media_sources.py`**
+  - [ ] **Analyze Requirements:** Define media source management endpoints
+  - [ ] **Feature: Media Sources Listing Endpoint**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: GET /api/media-sources returns user's online media sources
+      - [ ] Test case: Require authentication for access
+      - [ ] Test case: Filter and transform data for privacy compliance
+      - [ ] Test case: Handle PlexAPI errors gracefully
+      - [ ] Test case: Return proper HTTP status codes
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_media_source_routes.py`
+    - [ ] **Implementation:** Create media sources listing endpoint
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Individual Source Management Endpoint**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: PATCH /api/media-sources/{source_id} toggles individual source
+      - [ ] Test case: Validate source exists and belongs to user
+      - [ ] Test case: Return updated source status
+      - [ ] Test case: Handle PlexAPI operation errors
+      - [ ] Test case: Apply proper authorization checks
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
+    - [ ] **Implementation:** Create individual source management endpoint
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Bulk Operations Endpoint**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: POST /api/media-sources/disable-all performs bulk disable
+      - [ ] Test case: Use AccountOptOut.optOut() for bulk operations
+      - [ ] Test case: Return operation summary with success/failure counts
+      - [ ] Test case: Handle partial failures appropriately
+      - [ ] Test case: Add confirmation parameter to prevent accidental bulk operations
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
+    - [ ] **Implementation:** Create bulk operations endpoint
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 8: Main FastAPI Application
+
+- [ ] **Module: `app/main.py`**
+  - [ ] **Analyze Requirements:** Define FastAPI application setup and configuration
+  - [ ] **Feature: FastAPI Application Initialization**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Initialize FastAPI app with proper configuration
+      - [ ] Test case: Configure CORS middleware with security settings
+      - [ ] Test case: Register authentication and media source routes
+      - [ ] Test case: Set up exception handlers
+      - [ ] Test case: Configure security middleware
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_main.py`
+    - [ ] **Implementation:** Create FastAPI application with all middleware and routes
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: Health Check and Monitoring**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: GET /health returns application health status
+      - [ ] Test case: Include PlexAPI connectivity check in health endpoint
+      - [ ] Test case: Return proper status codes for health checks
+    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_main.py`
+    - [ ] **Implementation:** Add health check endpoints
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 9: Frontend Core Infrastructure
+
+- [ ] **Module: `frontend/src/types/index.ts`**
+  - [ ] **Analyze Requirements:** Define TypeScript interfaces for API integration
+  - [ ] **Feature: API Response Types**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: User interface matches backend schema
+      - [ ] Test case: MediaSource interface with proper field types
+      - [ ] Test case: Authentication response interfaces
+      - [ ] Test case: Error response interfaces
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/types.test.ts`
+    - [ ] **Implementation:** Create TypeScript type definitions
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/utils/constants.ts`**
+  - [ ] **Analyze Requirements:** Define application constants and configuration
+  - [ ] **Feature: API Configuration Constants**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: API endpoint URLs with environment handling
+      - [ ] Test case: OAuth configuration constants
+      - [ ] Test case: UI text constants for internationalization readiness
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/constants.test.ts`
+    - [ ] **Implementation:** Create application constants
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 10: Frontend API Service Layer
+
+- [ ] **Module: `frontend/src/services/api.ts`**
+  - [ ] **Analyze Requirements:** Create type-safe HTTP client for backend communication
+  - [ ] **Feature: HTTP Client with Authentication**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: HTTP client with automatic authentication token injection
+      - [ ] Test case: Request/response transformation with proper error handling
+      - [ ] Test case: Handle network errors and retry with exponential backoff
+      - [ ] Test case: Handle authentication token expiration
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/services/__tests__/api.test.ts`
+    - [ ] **Implementation:** Create HTTP client using fetch with authentication middleware
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+  - [ ] **Feature: API Endpoint Methods**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Authentication API methods (login, callback, logout)
+      - [ ] Test case: Media sources API methods (list, toggle, bulk disable)
+      - [ ] Test case: Proper error handling for each endpoint
+      - [ ] Test case: Type safety for request/response data
+    - [ ] **TDD: Write Failing Tests:** Add to `frontend/src/services/__tests__/api.test.ts`
+    - [ ] **Implementation:** Create API endpoint methods
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 11: Frontend State Management
+
+- [ ] **Module: `frontend/src/contexts/AuthContext.tsx`**
+  - [ ] **Analyze Requirements:** Define authentication state management
+  - [ ] **Feature: Authentication Context Provider**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Provide authentication state to child components
+      - [ ] Test case: Handle login/logout state transitions
+      - [ ] Test case: Manage authentication token storage
+      - [ ] Test case: Handle authentication errors and token expiration
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/contexts/__tests__/AuthContext.test.tsx`
+    - [ ] **Implementation:** Create authentication context with React Context API
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/hooks/useAuth.tsx`**
+  - [ ] **Analyze Requirements:** Create authentication hook for components
+  - [ ] **Feature: Authentication Hook**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Provide authentication state and methods
+      - [ ] Test case: Handle OAuth flow initiation and completion
+      - [ ] Test case: Manage secure token storage
+      - [ ] Test case: Handle automatic token refresh
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useAuth.test.tsx`
+    - [ ] **Implementation:** Create useAuth hook with authentication methods
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/hooks/useMediaSources.tsx`**
+  - [ ] **Analyze Requirements:** Create media sources data management hook
+  - [ ] **Feature: Media Sources State Management**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Fetch and cache media sources data
+      - [ ] Test case: Handle optimistic updates for better UX
+      - [ ] Test case: Implement error handling with retry logic
+      - [ ] Test case: Cache invalidation after mutations
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useMediaSources.test.tsx`
+    - [ ] **Implementation:** Create useMediaSources hook with React Query integration
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 12: Frontend UI Components
+
+- [ ] **Module: `frontend/src/components/AuthButton.tsx`**
+  - [ ] **Analyze Requirements:** Create authentication button component
+  - [ ] **Feature: OAuth Authentication Button**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Render login button when user is not authenticated
+      - [ ] Test case: Render user info and logout when authenticated
+      - [ ] Test case: Handle OAuth flow initiation
+      - [ ] Test case: Display loading states with accessible indicators
+      - [ ] Test case: Handle authentication errors with user feedback
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/components/__tests__/AuthButton.test.tsx`
+    - [ ] **Implementation:** Create responsive authentication button with TailwindCSS
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/components/MediaSourcesList.tsx`**
+  - [ ] **Analyze Requirements:** Create media sources list component
+  - [ ] **Feature: Media Sources Display and Management**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Render list of media sources with proper information
+      - [ ] Test case: Individual toggle controls with optimistic updates
+      - [ ] Test case: Loading skeletons and error states
+      - [ ] Test case: Accessibility compliance (ARIA labels, keyboard navigation)
+      - [ ] Test case: Responsive design for different screen sizes
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/components/__tests__/MediaSourcesList.test.tsx`
+    - [ ] **Implementation:** Create media sources list with virtualization for performance
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/components/BulkDisableButton.tsx`**
+  - [ ] **Analyze Requirements:** Create bulk disable functionality component
+  - [ ] **Feature: Bulk Disable Operation**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Prominent "Disable All" button with clear styling
+      - [ ] Test case: Confirmation dialog with clear messaging
+      - [ ] Test case: Progress indication for bulk operations
+      - [ ] Test case: Success/error feedback with toast notifications
+      - [ ] Test case: Prevent accidental clicks with confirmation step
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/components/__tests__/BulkDisableButton.test.tsx`
+    - [ ] **Implementation:** Create bulk disable button with confirmation flow
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+- [ ] **Module: `frontend/src/components/LoadingSpinner.tsx`**
+  - [ ] **Analyze Requirements:** Create reusable loading component
+  - [ ] **Feature: Loading State Component**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Render accessible loading spinner
+      - [ ] Test case: Support different sizes and styles
+      - [ ] Test case: Include proper ARIA labels for screen readers
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/components/__tests__/LoadingSpinner.test.tsx`
+    - [ ] **Implementation:** Create reusable loading spinner component
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 13: Frontend Main Application
+
+- [ ] **Module: `frontend/src/App.tsx`**
+  - [ ] **Analyze Requirements:** Create main application component
+  - [ ] **Feature: Application Layout and Routing**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Render main application layout
+      - [ ] Test case: Integrate authentication context provider
+      - [ ] Test case: Handle authentication flow integration
+      - [ ] Test case: Error boundary with proper error handling
+      - [ ] Test case: Responsive design across different devices
+    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/App.test.tsx`
+    - [ ] **Implementation:** Create main App component with context providers
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 14: Integration Testing
+
+- [ ] **Module: End-to-End Integration Tests**
+  - [ ] **Analyze Requirements:** Test complete application flow
+  - [ ] **Feature: Complete Authentication Flow**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Complete OAuth authentication flow from frontend to backend
+      - [ ] Test case: Media sources management end-to-end
+      - [ ] Test case: Error scenarios and recovery
+      - [ ] Test case: Security measures integration (CSRF, rate limiting)
+    - [ ] **TDD: Write Failing Tests:** Implement in `tests/e2e/test_complete_flow.py`
+    - [ ] **Implementation:** Create comprehensive end-to-end tests
+    - [ ] **TDD: Verify Tests Pass**
+    - [ ] **Refactor:** Review and optimize the implementation
+
+## Phase 15: Security Hardening and Performance Optimization
+
+- [ ] **Security Review and Enhancement**
+  - [ ] **Feature: Security Audit**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: CSRF protection effectiveness
+      - [ ] Test case: Rate limiting and abuse prevention
+      - [ ] Test case: Input sanitization and validation
+      - [ ] Test case: Session security and token handling
+    - [ ] **Implementation:** Enhance security based on audit findings
+    - [ ] **TDD: Verify Security Tests Pass**
+
+- [ ] **Performance Optimization**
+  - [ ] **Feature: Backend Performance**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: PlexAPI connection pooling
+      - [ ] Test case: Request caching implementation
+      - [ ] Test case: Response time optimization
+    - [ ] **Implementation:** Optimize backend performance
+    - [ ] **TDD: Verify Performance Tests Pass**
+
+  - [ ] **Feature: Frontend Performance**
+    - [ ] **TDD: Define Test Cases:**
+      - [ ] Test case: Code splitting and lazy loading
+      - [ ] Test case: Bundle size optimization
+      - [ ] Test case: Virtual scrolling for large lists
+    - [ ] **Implementation:** Optimize frontend performance
+    - [ ] **TDD: Verify Performance Tests Pass**
+
+## Phase 16: Documentation and Deployment
+
+- [ ] **Documentation Creation**
+  - [ ] **Create API Documentation**
+    - [ ] Document all API endpoints with examples
+    - [ ] Include authentication flow documentation
+    - [ ] Add error response documentation
+
+  - [ ] **Create User Documentation**
+    - [ ] User guide for media source management
+    - [ ] Privacy policy and data handling information
+    - [ ] Troubleshooting guide and FAQ
+
+  - [ ] **Create Developer Documentation**
+    - [ ] Architecture overview and design decisions
+    - [ ] Setup and development workflow
+    - [ ] Testing strategy and guidelines
+
+- [ ] **Deployment Preparation**
+  - [ ] **Create Deployment Configuration**
+    - [ ] Production environment configuration
+    - [ ] Health check endpoints
+    - [ ] Monitoring and logging setup
+
+  - [ ] **Create Deployment Scripts**
+    - [ ] Automated deployment script
+    - [ ] Health verification script
+    - [ ] Backup and recovery procedures
 
 ---
 
@@ -472,3 +648,15 @@ This implementation plan follows strict Test-Driven Development (TDD) methodolog
 - [ ] Implement data retention policies with automatic cleanup
 - [ ] Ensure no sensitive user data is logged or stored unnecessarily
 - [ ] Provide clear privacy policy and data handling documentation
+
+### API Security
+- [ ] Implement CSRF protection for all state-changing operations
+- [ ] Add rate limiting to prevent abuse
+- [ ] Use proper CORS configuration
+- [ ] Validate and sanitize all input data
+
+### Frontend Security
+- [ ] Implement Content Security Policy (CSP)
+- [ ] Use secure HTTP headers
+- [ ] Prevent XSS attacks through proper data handling
+- [ ] Ensure secure communication with HTTPS enforcement
