@@ -192,9 +192,9 @@ class PlexMediaSourceService:
             
             # Toggle the source based on enable flag
             if enable:
-                account.enableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportAttributeAccessIssue]
+                account.enableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
             else:
-                account.disableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportAttributeAccessIssue]
+                account.disableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportUnknownMemberType,reportAttributeAccessIssue]
             
             return True
             
@@ -254,8 +254,8 @@ class PlexMediaSourceService:
             
             # Find the specific source
             source_identifier_clean = source_identifier.strip()
-            for opt_out in account_opt_outs:
-                opt_out_key = str(getattr(opt_out, 'key', ''))
+            for opt_out in account_opt_outs:  # pyright: ignore[reportUnknownVariableType]
+                opt_out_key = str(getattr(opt_out, 'key', ''))  # pyright: ignore[reportUnknownArgumentType]
                 if opt_out_key == source_identifier_clean:
                     return self.transform_account_opt_out(opt_out)  # pyright: ignore[reportUnknownArgumentType]
             

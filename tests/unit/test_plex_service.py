@@ -419,8 +419,8 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         # Assert
         assert result is True
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
-        mock_account_with_enable_disable.enableOnlineMediaSource.assert_called_once_with(source_identifier)
-        mock_account_with_enable_disable.disableOnlineMediaSource.assert_not_called()
+        mock_account_with_enable_disable.enableOnlineMediaSource.assert_called_once_with(source_identifier)  # pyright: ignore[reportAny]
+        mock_account_with_enable_disable.disableOnlineMediaSource.assert_not_called()  # pyright: ignore[reportAny]
 
     @patch("app.services.plex_service.MyPlexAccount")
     def test_toggle_individual_source_disable_success(
@@ -445,8 +445,8 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         # Assert
         assert result is True
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
-        mock_account_with_enable_disable.disableOnlineMediaSource.assert_called_once_with(source_identifier)
-        mock_account_with_enable_disable.enableOnlineMediaSource.assert_not_called()
+        mock_account_with_enable_disable.disableOnlineMediaSource.assert_called_once_with(source_identifier)  # pyright: ignore[reportAny]
+        mock_account_with_enable_disable.enableOnlineMediaSource.assert_not_called()  # pyright: ignore[reportAny]
 
     def test_toggle_individual_source_invalid_token(
         self,
@@ -459,8 +459,8 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         for invalid_token in invalid_tokens:
             # Act & Assert
             with pytest.raises(AuthenticationException, match="Invalid authentication token provided"):
-                service.toggle_individual_source(
-                    authentication_token=invalid_token,  # pyright: ignore[reportArgumentType]
+                _ = service.toggle_individual_source(
+                    authentication_token=invalid_token,
                     source_identifier="spotify",
                     enable=True
                 )
@@ -477,9 +477,9 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         for invalid_identifier in invalid_identifiers:
             # Act & Assert
             with pytest.raises(ValueError, match="Invalid source identifier provided"):
-                service.toggle_individual_source(
+                _ = service.toggle_individual_source(
                     authentication_token=mock_user.authentication_token,
-                    source_identifier=invalid_identifier,  # pyright: ignore[reportArgumentType]
+                    source_identifier=invalid_identifier,
                     enable=True
                 )
 
@@ -496,7 +496,7 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(AuthenticationException, match="Authentication failed with provided token"):
-            service.toggle_individual_source(
+            _ = service.toggle_individual_source(
                 authentication_token=mock_user.authentication_token,
                 source_identifier="spotify",
                 enable=True
@@ -512,12 +512,12 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         """Test handling of PlexAPI bad request errors during source toggle."""
         # Arrange
         mock_account = Mock()
-        mock_account.enableOnlineMediaSource.side_effect = BadRequest("Invalid source")
+        mock_account.enableOnlineMediaSource.side_effect = BadRequest("Invalid source")  # pyright: ignore[reportAny]
         mock_my_plex_account.return_value = mock_account
         
         # Act & Assert
         with pytest.raises(PlexAPIException, match="Failed to toggle media source"):
-            service.toggle_individual_source(
+            _ = service.toggle_individual_source(
                 authentication_token=mock_user.authentication_token,
                 source_identifier="invalid_source",
                 enable=True
@@ -533,12 +533,12 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         """Test handling of general exceptions during source toggle."""
         # Arrange
         mock_account = Mock()
-        mock_account.disableOnlineMediaSource.side_effect = Exception("Unexpected error")
+        mock_account.disableOnlineMediaSource.side_effect = Exception("Unexpected error")  # pyright: ignore[reportAny]
         mock_my_plex_account.return_value = mock_account
         
         # Act & Assert
         with pytest.raises(PlexAPIException, match="Unexpected error during source toggle operation"):
-            service.toggle_individual_source(
+            _ = service.toggle_individual_source(
                 authentication_token=mock_user.authentication_token,
                 source_identifier="spotify",
                 enable=False
@@ -589,7 +589,7 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(ValueError, match="Media source with identifier 'nonexistent' not found"):
-            service.get_individual_source_status(
+            _ = service.get_individual_source_status(
                 authentication_token=mock_user.authentication_token,
                 source_identifier="nonexistent"
             )
@@ -605,8 +605,8 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         for invalid_token in invalid_tokens:
             # Act & Assert
             with pytest.raises(AuthenticationException, match="Invalid authentication token provided"):
-                service.get_individual_source_status(
-                    authentication_token=invalid_token,  # pyright: ignore[reportArgumentType]
+                _ = service.get_individual_source_status(
+                    authentication_token=invalid_token,
                     source_identifier="spotify"
                 )
 
@@ -622,7 +622,7 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
         for invalid_identifier in invalid_identifiers:
             # Act & Assert
             with pytest.raises(ValueError, match="Invalid source identifier provided"):
-                service.get_individual_source_status(
+                _ = service.get_individual_source_status(
                     authentication_token=mock_user.authentication_token,
-                    source_identifier=invalid_identifier  # pyright: ignore[reportArgumentType]
+                    source_identifier=invalid_identifier
                 ) 
