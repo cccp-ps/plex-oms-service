@@ -20,7 +20,11 @@ from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[repor
 from app.config import Settings
 from app.models.plex_models import OnlineMediaSource, PlexUser
 from app.services.plex_service import PlexMediaSourceService
-from app.utils.exceptions import PlexAPIException, AuthenticationException
+from app.utils.exceptions import (
+    AuthenticationException,
+    PlexAPIException,
+    ConnectionException
+)
 
 
 
@@ -886,3 +890,200 @@ class TestBulkOperations(TestPlexMediaSourceService):
         # Act & Assert
         with pytest.raises(PlexAPIException, match="Unexpected error during bulk operation"):
             _ = service.bulk_disable_all_sources(mock_user.authentication_token) 
+
+
+class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
+    """Test rate limiting and enhanced error handling functionality."""
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_handle_plexapi_rate_limits_with_proper_backoff(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test handling of PlexAPI rate limits with exponential backoff."""
+        from plexapi.exceptions import BadRequest  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange - Simulate rate limit error (HTTP 429-like behavior)
+        rate_limit_error = BadRequest("Rate limit exceeded. Please try again later.")
+        mock_my_plex_account.side_effect = rate_limit_error
+        
+        # Act & Assert
+        with pytest.raises(PlexAPIException) as exc_info:
+            service.get_media_sources_with_rate_limiting(mock_user.authentication_token)
+        
+        # Verify the exception was properly wrapped
+        assert "Rate limit" in str(exc_info.value)
+        assert exc_info.value.original_error == rate_limit_error
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    @patch("app.services.plex_service.time.sleep")
+    def test_retry_failed_requests_with_exponential_backoff(
+        self,
+        mock_sleep: Mock,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test retry logic with exponential backoff for failed requests."""
+        from plexapi.exceptions import BadRequest  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange - Fail first two attempts, succeed on third
+        mock_account = Mock()
+        mock_account.onlineMediaSources.return_value = []  # pyright: ignore[reportAny]
+        
+        connection_error = BadRequest("Connection timeout")
+        mock_my_plex_account.side_effect = [
+            connection_error,  # First attempt fails
+            connection_error,  # Second attempt fails  
+            mock_account       # Third attempt succeeds
+        ]
+        
+        # Act
+        result = service.get_media_sources_with_retry(mock_user.authentication_token)
+        
+        # Assert
+        assert isinstance(result, list)
+        assert len(result) == 0  # Empty list from successful call
+        
+        # Verify exponential backoff was used
+        assert mock_sleep.call_count == 2  # Two retries
+        # Check exponential backoff delays: 1s, 2s
+        expected_delays = [1.0, 2.0]
+        actual_delays = [call.args[0] for call in mock_sleep.call_args_list]
+        assert actual_delays == expected_delays
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_handle_network_timeout_errors(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test handling of network timeout errors."""
+        import socket
+        
+        # Arrange - Simulate network timeout
+        timeout_error = socket.timeout("Connection timed out")
+        mock_my_plex_account.side_effect = timeout_error
+        
+        # Act & Assert
+        with pytest.raises(PlexAPIException) as exc_info:
+            service.get_media_sources_with_timeout_handling(mock_user.authentication_token)
+        
+        # Verify timeout error was properly handled
+        assert "timeout" in str(exc_info.value).lower()
+        assert exc_info.value.original_error == timeout_error
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    @patch("app.services.plex_service.logger")
+    def test_log_errors_appropriately_without_exposing_sensitive_data(
+        self,
+        mock_logger: Mock,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test that errors are logged securely without exposing sensitive data."""
+        from plexapi.exceptions import Unauthorized  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange - Simulate authentication error with sensitive token in message
+        sensitive_token = "secret_token_12345"
+        auth_error = Unauthorized(f"Invalid token: {sensitive_token}")
+        mock_my_plex_account.side_effect = auth_error
+        
+        # Act
+        with pytest.raises(AuthenticationException):
+            service.get_media_sources_with_secure_logging(sensitive_token)
+        
+        # Assert - Verify logging occurred without sensitive data
+        assert mock_logger.error.called
+        
+        # Check that the logged message doesn't contain the sensitive token
+        logged_args = [str(arg) for call in mock_logger.error.call_args_list for arg in call[0]]
+        for logged_message in logged_args:
+            assert sensitive_token not in logged_message
+            assert "***" in logged_message or "[REDACTED]" in logged_message
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    @patch("app.services.plex_service.time.sleep")
+    def test_rate_limit_backoff_with_jitter(
+        self,
+        mock_sleep: Mock,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test rate limit handling with jitter to avoid thundering herd."""
+        from plexapi.exceptions import BadRequest  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange
+        rate_limit_error = BadRequest("429 Too Many Requests")
+        mock_my_plex_account.side_effect = [
+            rate_limit_error,
+            rate_limit_error, 
+            Mock(onlineMediaSources=Mock(return_value=[]))
+        ]
+        
+        # Act
+        result = service.get_media_sources_with_jitter(mock_user.authentication_token)
+        
+        # Assert
+        assert isinstance(result, list)
+        assert mock_sleep.call_count == 2
+        
+        # Verify jitter was applied (delays should vary slightly from base exponential)
+        delays = [call.args[0] for call in mock_sleep.call_args_list]
+        # Delays should be in reasonable range with jitter
+        assert 0.5 <= delays[0] <= 2.5  # Base 1s ± 50% jitter
+        assert 1.0 <= delays[1] <= 4.0  # Base 2s ± 50% jitter
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_max_retry_limit_enforcement(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test that retry attempts respect maximum retry limits."""
+        from plexapi.exceptions import BadRequest  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange - Always fail to test max retries
+        connection_error = BadRequest("Connection failed")
+        mock_my_plex_account.side_effect = connection_error
+        
+        # Act & Assert
+        with pytest.raises(PlexAPIException):
+            service.get_media_sources_with_max_retries(
+                mock_user.authentication_token, 
+                max_retries=2
+            )
+        
+        # Verify exactly max_retries + 1 attempts were made (initial + retries)
+        assert mock_my_plex_account.call_count == 3  # 1 initial + 2 retries
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_circuit_breaker_pattern_for_repeated_failures(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test circuit breaker pattern to prevent cascade failures."""
+        from plexapi.exceptions import BadRequest  # pyright: ignore[reportMissingTypeStubs]
+        
+        # Arrange - Simulate repeated failures to trigger circuit breaker
+        connection_error = BadRequest("Service unavailable")
+        mock_my_plex_account.side_effect = connection_error
+        
+        # Act - Make multiple calls to trigger circuit breaker
+        for _ in range(5):  # Exceed circuit breaker threshold
+            with pytest.raises((PlexAPIException, ConnectionException)):
+                service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
+        
+        # Next call should fail fast due to circuit breaker
+        with pytest.raises(ConnectionException) as exc_info:
+            service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
+        
+        assert "circuit breaker" in str(exc_info.value).lower() or "service unavailable" in str(exc_info.value).lower() 

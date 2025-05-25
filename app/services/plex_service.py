@@ -10,8 +10,12 @@ Features:
 - Empty sources list handling
 - PlexAPI connection error handling
 - Individual source management and bulk operations
+- Rate limiting and enhanced error handling with retry logic
 """
 
+import logging
+import random
+import socket
 import time
 from typing import TYPE_CHECKING, TypedDict
 
@@ -22,12 +26,22 @@ from app.config import get_settings
 from app.models.plex_models import OnlineMediaSource
 from app.utils.exceptions import (
     AuthenticationException,
-    PlexAPIException
+    PlexAPIException,
+    ConnectionException,
+    RateLimitException
 )
 
 if TYPE_CHECKING:
     from app.config import Settings
 
+# Configure secure logging
+logger = logging.getLogger(__name__)
+
+# Circuit breaker state for connection failures
+_circuit_breaker_failures = 0
+_circuit_breaker_last_failure_time = 0.0
+_circuit_breaker_threshold = 5
+_circuit_breaker_timeout = 300.0  # 5 minutes
 
 class BulkOperationResult(TypedDict):
     """Type definition for bulk operation result."""
@@ -426,4 +440,253 @@ class PlexMediaSourceService:
                 # Continue to next retry attempt
                 continue
         
-        return False 
+        return False
+
+    def get_media_sources_with_rate_limiting(self, authentication_token: str | None) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with rate limit handling.
+        
+        Args:
+            authentication_token: Plex authentication token
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            RateLimitException: When rate limits are exceeded
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails
+        """
+        try:
+            return self.get_media_sources(authentication_token)
+        except PlexAPIException as e:
+            if e.original_error and "rate limit" in str(e.original_error).lower():
+                raise RateLimitException(
+                    "Rate limit exceeded. Please try again later.",
+                    original_error=e.original_error
+                )
+            raise
+
+    def get_media_sources_with_retry(self, authentication_token: str | None, max_retries: int = 3) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with exponential backoff retry logic.
+        
+        Args:
+            authentication_token: Plex authentication token
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails after all retries
+        """
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
+            try:
+                return self.get_media_sources(authentication_token)
+            except PlexAPIException as e:
+                # Don't retry authentication errors
+                if isinstance(e, AuthenticationException):
+                    raise
+                
+                # If this is the last attempt, give up
+                if attempt == max_retries:
+                    raise
+                
+                # Calculate exponential backoff delay
+                delay = float(2 ** attempt)  # 1s, 2s, 4s...
+                logger.info(f"Retrying PlexAPI request after {delay}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+        
+        # This should never be reached due to the logic above
+        raise PlexAPIException("Maximum retries exceeded")  # pragma: no cover
+
+    def get_media_sources_with_timeout_handling(self, authentication_token: str | None) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with network timeout error handling.
+        
+        Args:
+            authentication_token: Plex authentication token
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            ConnectionException: When network timeout occurs
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails
+        """
+        # Validate authentication token
+        if not authentication_token or not authentication_token.strip():
+            raise AuthenticationException("Invalid authentication token provided")
+        
+        try:
+            # Create MyPlexAccount instance with the token
+            account = MyPlexAccount(token=authentication_token.strip())
+            
+            # Get online media sources from the account
+            account_opt_outs: list[object] = account.onlineMediaSources()  # pyright: ignore[reportUnknownVariableType]
+            
+            # Transform and return the sources
+            return [
+                self.transform_account_opt_out(opt_out)  # pyright: ignore[reportUnknownArgumentType]
+                for opt_out in account_opt_outs  # pyright: ignore[reportUnknownVariableType]
+            ]
+            
+        except (socket.timeout, socket.error, OSError) as e:
+            # Handle network timeout errors specifically
+            raise ConnectionException(
+                "Network timeout occurred while connecting to Plex API",
+                original_error=e
+            )
+        except Unauthorized as e:
+            # Handle authentication errors
+            raise AuthenticationException(
+                "Authentication failed with provided token",
+                original_error=e
+            )
+        except BadRequest as e:
+            # Handle connection errors
+            raise PlexAPIException(
+                "Failed to connect to Plex API",
+                original_error=e
+            )
+        except Exception as e:
+            # Handle any other unexpected errors
+            raise PlexAPIException(
+                "Unexpected error during Plex API operation",
+                original_error=e
+            )
+
+    def get_media_sources_with_secure_logging(self, authentication_token: str | None) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with secure error logging that redacts sensitive data.
+        
+        Args:
+            authentication_token: Plex authentication token
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails
+        """
+        try:
+            return self.get_media_sources(authentication_token)
+        except Exception as e:
+            # Log error securely without exposing sensitive data
+            error_message = str(e)
+            
+            # Redact authentication tokens from error messages
+            if authentication_token and authentication_token.strip():
+                error_message = error_message.replace(authentication_token.strip(), "[REDACTED]")
+            
+            # Redact other potential sensitive data patterns
+            import re
+            # Redact token-like patterns (alphanumeric strings > 10 chars)
+            error_message = re.sub(r'\b[A-Za-z0-9]{10,}\b', '***', error_message)
+            
+            logger.error(f"PlexAPI error (sanitized): {error_message}")
+            
+            # Re-raise the original exception
+            if isinstance(e, (AuthenticationException, PlexAPIException)):
+                raise
+            raise PlexAPIException("Unexpected error during Plex API operation", original_error=e)
+
+    def get_media_sources_with_jitter(self, authentication_token: str | None, max_retries: int = 3) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with jittered exponential backoff to avoid thundering herd.
+        
+        Args:
+            authentication_token: Plex authentication token
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails after all retries
+        """
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
+            try:
+                return self.get_media_sources(authentication_token)
+            except PlexAPIException as e:
+                # Don't retry authentication errors
+                if isinstance(e, AuthenticationException):
+                    raise
+                
+                # If this is the last attempt, give up
+                if attempt == max_retries:
+                    raise
+                
+                # Calculate exponential backoff delay with jitter
+                base_delay = float(2 ** attempt)  # 1s, 2s, 4s...
+                jitter = random.uniform(0.5, 1.5)  # ±50% jitter
+                delay = base_delay * jitter
+                
+                logger.info(f"Retrying PlexAPI request after {delay:.2f}s with jitter (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+        
+        # This should never be reached due to the logic above
+        raise PlexAPIException("Maximum retries exceeded")  # pragma: no cover
+
+    def get_media_sources_with_max_retries(self, authentication_token: str | None, max_retries: int = 2) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with configurable maximum retry limits.
+        
+        Args:
+            authentication_token: Plex authentication token
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails after all retries
+        """
+        return self.get_media_sources_with_retry(authentication_token, max_retries)
+
+    def get_media_sources_with_circuit_breaker(self, authentication_token: str | None) -> list[OnlineMediaSource]:
+        """
+        Retrieve online media sources with circuit breaker pattern to prevent cascade failures.
+        
+        Args:
+            authentication_token: Plex authentication token
+            
+        Returns:
+            List of OnlineMediaSource objects
+            
+        Raises:
+            ConnectionException: When circuit breaker is open due to repeated failures
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails
+        """
+        global _circuit_breaker_failures, _circuit_breaker_last_failure_time
+        
+        # Check if circuit breaker is open
+        current_time = time.time()
+        if (_circuit_breaker_failures >= _circuit_breaker_threshold and 
+            current_time - _circuit_breaker_last_failure_time < _circuit_breaker_timeout):
+            raise ConnectionException(
+                "Circuit breaker is open - Plex API service temporarily unavailable"
+            )
+        
+        try:
+            result = self.get_media_sources(authentication_token)
+            # Reset circuit breaker on success
+            _circuit_breaker_failures = 0
+            return result
+            
+        except PlexAPIException as e:
+            # Don't count authentication errors as circuit breaker failures
+            if not isinstance(e, AuthenticationException):
+                _circuit_breaker_failures += 1
+                _circuit_breaker_last_failure_time = current_time
+                
+                logger.warning(f"Circuit breaker failure count: {_circuit_breaker_failures}/{_circuit_breaker_threshold}")
+            
+            raise 
