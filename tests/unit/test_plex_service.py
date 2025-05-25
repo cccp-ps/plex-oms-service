@@ -705,7 +705,7 @@ class TestBulkOperations(TestPlexMediaSourceService):
         
         # Verify optOut was called on each source
         opt_outs = mock_account_with_bulk_operations.onlineMediaSources.return_value  # pyright: ignore[reportAny]
-        for opt_out in opt_outs:
+        for opt_out in opt_outs:  # pyright: ignore[reportAny]
             opt_out.optOut.assert_called_once()  # pyright: ignore[reportAny]
 
     @patch("app.services.plex_service.MyPlexAccount")

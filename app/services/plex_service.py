@@ -336,7 +336,7 @@ class PlexMediaSourceService:
                 }
             
             # Initialize operation tracking
-            total_requested = len(account_opt_outs)
+            total_requested = len(account_opt_outs)  # pyright: ignore[reportUnknownArgumentType]
             successful_count = 0
             failed_count = 0
             disabled_sources: list[str] = []
@@ -347,7 +347,7 @@ class PlexMediaSourceService:
                 source_key = str(getattr(opt_out, 'key', 'unknown'))  # pyright: ignore[reportUnknownArgumentType]
                 
                 # Attempt to disable the source with retry logic
-                if self._disable_source_with_retry(opt_out, source_key):  # pyright: ignore[reportUnknownArgumentType]
+                if self._disable_source_with_retry(opt_out):  # pyright: ignore[reportUnknownArgumentType]
                     successful_count += 1
                     disabled_sources.append(source_key)
                 else:
@@ -392,13 +392,12 @@ class PlexMediaSourceService:
                 original_error=e
             )
     
-    def _disable_source_with_retry(self, opt_out: object, source_key: str, max_retries: int = 3) -> bool:
+    def _disable_source_with_retry(self, opt_out: object, max_retries: int = 3) -> bool:
         """
         Disable a single source with exponential backoff retry logic.
         
         Args:
             opt_out: AccountOptOut object from PlexAPI
-            source_key: Source identifier for logging (unused but kept for API consistency)
             max_retries: Maximum number of retry attempts
             
         Returns:
@@ -407,9 +406,9 @@ class PlexMediaSourceService:
         for attempt in range(max_retries):
             try:
                 # Call optOut method on the AccountOptOut object
-                opt_out_method = getattr(opt_out, 'optOut', None)  # pyright: ignore[reportUnknownArgumentType]
+                opt_out_method = getattr(opt_out, 'optOut', None)
                 if opt_out_method and callable(opt_out_method):  # pyright: ignore[reportAny]
-                    _ = opt_out_method()  # pyright: ignore[reportAny]
+                    _ = opt_out_method()
                     return True
                 else:
                     # Source doesn't have optOut method
