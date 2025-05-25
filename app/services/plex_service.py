@@ -154,4 +154,131 @@ class PlexMediaSourceService:
             return title_mappings[identifier]
         else:
             # Create default title from identifier
-            return identifier.replace("_", " ").title() 
+            return identifier.replace("_", " ").title()
+    
+    def toggle_individual_source(
+        self,
+        authentication_token: str | None,
+        source_identifier: str | None,
+        enable: bool
+    ) -> bool:
+        """
+        Toggle individual media source enable/disable status.
+        
+        Args:
+            authentication_token: Plex authentication token
+            source_identifier: Identifier for the media source to toggle
+            enable: True to enable the source, False to disable it
+            
+        Returns:
+            True if the operation was successful
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            ValueError: When source identifier is invalid or not found
+            PlexAPIException: When PlexAPI operation fails
+        """
+        # Validate authentication token
+        if not authentication_token or not authentication_token.strip():
+            raise AuthenticationException("Invalid authentication token provided")
+        
+        # Validate source identifier
+        if not source_identifier or not source_identifier.strip():
+            raise ValueError("Invalid source identifier provided")
+        
+        try:
+            # Create MyPlexAccount instance with the token
+            account = MyPlexAccount(token=authentication_token.strip())
+            
+            # Toggle the source based on enable flag
+            if enable:
+                account.enableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportAttributeAccessIssue]
+            else:
+                account.disableOnlineMediaSource(source_identifier.strip())  # pyright: ignore[reportAttributeAccessIssue]
+            
+            return True
+            
+        except Unauthorized as e:
+            # Handle authentication errors
+            raise AuthenticationException(
+                "Authentication failed with provided token",
+                original_error=e
+            )
+        except BadRequest as e:
+            # Handle bad request errors (e.g., invalid source)
+            raise PlexAPIException(
+                "Failed to toggle media source",
+                original_error=e
+            )
+        except Exception as e:
+            # Handle any other unexpected errors
+            raise PlexAPIException(
+                "Unexpected error during source toggle operation",
+                original_error=e
+            )
+    
+    def get_individual_source_status(
+        self,
+        authentication_token: str | None,
+        source_identifier: str | None
+    ) -> OnlineMediaSource:
+        """
+        Get status of an individual media source.
+        
+        Args:
+            authentication_token: Plex authentication token
+            source_identifier: Identifier for the media source
+            
+        Returns:
+            OnlineMediaSource object with current status
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            ValueError: When source identifier is invalid or not found
+            PlexAPIException: When PlexAPI connection fails
+        """
+        # Validate authentication token
+        if not authentication_token or not authentication_token.strip():
+            raise AuthenticationException("Invalid authentication token provided")
+        
+        # Validate source identifier
+        if not source_identifier or not source_identifier.strip():
+            raise ValueError("Invalid source identifier provided")
+        
+        try:
+            # Create MyPlexAccount instance with the token
+            account = MyPlexAccount(token=authentication_token.strip())
+            
+            # Get online media sources from the account
+            account_opt_outs: list[object] = account.onlineMediaSources()  # pyright: ignore[reportUnknownVariableType]
+            
+            # Find the specific source
+            source_identifier_clean = source_identifier.strip()
+            for opt_out in account_opt_outs:
+                opt_out_key = str(getattr(opt_out, 'key', ''))
+                if opt_out_key == source_identifier_clean:
+                    return self.transform_account_opt_out(opt_out)  # pyright: ignore[reportUnknownArgumentType]
+            
+            # Source not found
+            raise ValueError(f"Media source with identifier '{source_identifier_clean}' not found")
+            
+        except Unauthorized as e:
+            # Handle authentication errors
+            raise AuthenticationException(
+                "Authentication failed with provided token",
+                original_error=e
+            )
+        except BadRequest as e:
+            # Handle connection errors
+            raise PlexAPIException(
+                "Failed to connect to Plex API",
+                original_error=e
+            )
+        except Exception as e:
+            # Handle any other unexpected errors (except our ValueError)
+            if isinstance(e, ValueError):
+                raise  # Re-raise our ValueError
+            raise PlexAPIException(
+                "Unexpected error during Plex API operation",
+                original_error=e
+            ) 

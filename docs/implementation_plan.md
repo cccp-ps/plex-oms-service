@@ -170,30 +170,30 @@ The plan is organized into logical phases that build upon each other, ensuring a
 
 ## Phase 5: Plex API Service
 
-- [ ] **Module: `app/services/plex_service.py`**
-  - [ ] **Analyze PlexAPI:** Review MyPlexAccount.onlineMediaSources() and AccountOptOut functionality
-  - [ ] **Feature: Media Sources Retrieval**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Retrieve online media sources using MyPlexAccount
-      - [ ] Test case: Parse and transform source data
-      - [ ] Test case: Handle empty sources list
-      - [ ] Test case: Handle PlexAPI connection errors
-      - [ ] Test case: Apply proper data filtering for privacy
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_service.py`
-    - [ ] **Implementation:** Create PlexMediaSourceService class
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/services/plex_service.py`**
+  - [x] **Analyze PlexAPI:** Review MyPlexAccount.onlineMediaSources() and AccountOptOut functionality
+  - [x] **Feature: Media Sources Retrieval**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Retrieve online media sources using MyPlexAccount
+      - [x] Test case: Parse and transform source data
+      - [x] Test case: Handle empty sources list
+      - [x] Test case: Handle PlexAPI connection errors
+      - [x] Test case: Apply proper data filtering for privacy
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_plex_service.py`
+    - [x] **Implementation:** Create PlexMediaSourceService class
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Individual Source Management**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Toggle individual source enable/disable status
-      - [ ] Test case: Validate source exists before operation
-      - [ ] Test case: Handle PlexAPI operation errors
-      - [ ] Test case: Return updated source status
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
-    - [ ] **Implementation:** Add individual source management methods
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Individual Source Management**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Toggle individual source enable/disable status
+      - [x] Test case: Validate source exists before operation
+      - [x] Test case: Handle PlexAPI operation errors
+      - [x] Test case: Return updated source status
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
+    - [x] **Implementation:** Add individual source management methods
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Bulk Operations**
     - [ ] **TDD: Define Test Cases:**
