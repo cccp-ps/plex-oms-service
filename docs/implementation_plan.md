@@ -195,16 +195,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Bulk Operations**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Bulk disable all sources using AccountOptOut
-      - [ ] Test case: Handle partial failures in bulk operations
-      - [ ] Test case: Return operation summary with success/failure counts
-      - [ ] Test case: Implement proper retry logic with exponential backoff
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
-    - [ ] **Implementation:** Add bulk operations with AccountOptOut.optOut()
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Bulk Operations**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Bulk disable all sources using AccountOptOut
+      - [x] Test case: Handle partial failures in bulk operations
+      - [x] Test case: Return operation summary with success/failure counts
+      - [x] Test case: Implement proper retry logic with exponential backoff
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_plex_service.py`
+    - [x] **Implementation:** Add bulk operations with AccountOptOut.optOut()
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Rate Limiting and Error Handling**
     - [ ] **TDD: Define Test Cases:**

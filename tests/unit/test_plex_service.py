@@ -626,3 +626,263 @@ class TestIndividualSourceManagement(TestPlexMediaSourceService):
                     authentication_token=mock_user.authentication_token,
                     source_identifier=invalid_identifier
                 ) 
+
+
+class TestBulkOperations(TestPlexMediaSourceService):
+    """Test bulk operations functionality."""
+
+    @pytest.fixture
+    def mock_account_with_bulk_operations(self, mock_account_opt_outs: list[object]) -> Mock:
+        """Create mock MyPlexAccount with bulk operations methods."""
+        mock_account = Mock()
+        mock_account.onlineMediaSources.return_value = mock_account_opt_outs  # pyright: ignore[reportAny]
+        
+        # Mock individual opt-out objects with optOut methods
+        mock_opt_outs_with_methods: list[Mock] = []
+        for opt_out in mock_account_opt_outs:
+            mock_opt_out_with_method = Mock()
+            mock_opt_out_with_method.key = getattr(opt_out, 'key', 'unknown')
+            mock_opt_out_with_method.value = getattr(opt_out, 'value', 'opt_out')
+            mock_opt_out_with_method.optOut = Mock()  # Mock the optOut method
+            mock_opt_outs_with_methods.append(mock_opt_out_with_method)
+        
+        mock_account.onlineMediaSources.return_value = mock_opt_outs_with_methods  # pyright: ignore[reportAny]
+        return mock_account
+
+    @pytest.fixture
+    def mock_account_with_partial_failures(self, mock_account_opt_outs: list[object]) -> Mock:
+        """Create mock MyPlexAccount where some bulk operations fail."""
+        mock_account = Mock()
+        
+        # Create opt-out objects where some operations will fail
+        mock_opt_outs_with_failures: list[Mock] = []
+        for i, opt_out in enumerate(mock_account_opt_outs):
+            mock_opt_out_with_method = Mock()
+            mock_opt_out_with_method.key = getattr(opt_out, 'key', f'source_{i}')
+            mock_opt_out_with_method.value = getattr(opt_out, 'value', 'opt_in')
+            
+            # Make first source fail, others succeed
+            if i == 0:
+                mock_opt_out_with_method.optOut = Mock(side_effect=BadRequest("Failed to opt out"))
+            else:
+                mock_opt_out_with_method.optOut = Mock()
+            
+            mock_opt_outs_with_failures.append(mock_opt_out_with_method)
+        
+        mock_account.onlineMediaSources.return_value = mock_opt_outs_with_failures  # pyright: ignore[reportAny]
+        return mock_account
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_all_sources_success(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser,
+        mock_account_with_bulk_operations: Mock
+    ) -> None:
+        """Test successful bulk disable of all sources using AccountOptOut."""
+        # Arrange
+        mock_my_plex_account.return_value = mock_account_with_bulk_operations
+        
+        # Act
+        result = service.bulk_disable_all_sources(mock_user.authentication_token)
+        
+        # Assert
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert result["total_requested"] == 3
+        assert result["successful_count"] == 3
+        assert result["failed_count"] == 0
+        assert len(result["disabled_sources"]) == 3
+        assert len(result["failed_sources"]) == 0
+        assert "Successfully disabled 3 media sources" in result["message"]
+        
+        # Verify MyPlexAccount was created with correct token
+        mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
+        
+        # Verify onlineMediaSources was called
+        mock_account_with_bulk_operations.onlineMediaSources.assert_called_once()  # pyright: ignore[reportAny]
+        
+        # Verify optOut was called on each source
+        opt_outs = mock_account_with_bulk_operations.onlineMediaSources.return_value  # pyright: ignore[reportAny]
+        for opt_out in opt_outs:
+            opt_out.optOut.assert_called_once()  # pyright: ignore[reportAny]
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_partial_failures(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser,
+        mock_account_with_partial_failures: Mock
+    ) -> None:
+        """Test bulk disable with partial failures handling."""
+        # Arrange
+        mock_my_plex_account.return_value = mock_account_with_partial_failures
+        
+        # Act
+        result = service.bulk_disable_all_sources(mock_user.authentication_token)
+        
+        # Assert
+        assert isinstance(result, dict)
+        assert result["success"] is False  # Overall operation failed due to partial failures
+        assert result["total_requested"] == 3
+        assert result["successful_count"] == 2
+        assert result["failed_count"] == 1
+        assert len(result["disabled_sources"]) == 2
+        assert len(result["failed_sources"]) == 1
+        assert "Disabled 2 out of 3 media sources" in result["message"]
+        
+        # Verify the failed source is the first one (spotify)
+        assert "spotify" in result["failed_sources"]
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_return_operation_summary(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser,
+        mock_account_with_bulk_operations: Mock
+    ) -> None:
+        """Test bulk disable returns proper operation summary with success/failure counts."""
+        # Arrange
+        mock_my_plex_account.return_value = mock_account_with_bulk_operations
+        
+        # Act
+        result = service.bulk_disable_all_sources(mock_user.authentication_token)
+        
+        # Assert - Verify all required fields are present
+        required_fields = [
+            "success", "total_requested", "successful_count", "failed_count",
+            "disabled_sources", "failed_sources", "message"
+        ]
+        for field in required_fields:
+            assert field in result, f"Missing required field: {field}"
+        
+        # Verify data types
+        assert isinstance(result["success"], bool)
+        assert isinstance(result["total_requested"], int)
+        assert isinstance(result["successful_count"], int)
+        assert isinstance(result["failed_count"], int)
+        assert isinstance(result["disabled_sources"], list)
+        assert isinstance(result["failed_sources"], list)
+        assert isinstance(result["message"], str)
+        
+        # Verify counts add up correctly
+        assert result["successful_count"] + result["failed_count"] == result["total_requested"]
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    @patch("app.services.plex_service.time.sleep")  # Mock sleep for testing
+    def test_bulk_disable_with_retry_logic(
+        self,
+        mock_sleep: Mock,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test bulk disable implements proper retry logic with exponential backoff."""
+        # Arrange
+        mock_account = Mock()
+        mock_opt_out = Mock()
+        mock_opt_out.key = "spotify"
+        mock_opt_out.value = "opt_in"
+        
+        # First call fails with BadRequest, second call succeeds
+        mock_opt_out.optOut = Mock(side_effect=[BadRequest("Temporary failure"), None])
+        mock_account.onlineMediaSources.return_value = [mock_opt_out]  # pyright: ignore[reportAny]
+        mock_my_plex_account.return_value = mock_account
+        
+        # Act
+        result = service.bulk_disable_all_sources(mock_user.authentication_token)
+        
+        # Assert
+        assert result["success"] is True
+        assert result["successful_count"] == 1
+        assert result["failed_count"] == 0
+        
+        # Verify retry logic was executed
+        assert mock_opt_out.optOut.call_count == 2  # pyright: ignore[reportAny]
+        mock_sleep.assert_called_once()  # Verify sleep was called for backoff
+
+    def test_bulk_disable_invalid_authentication_token(
+        self,
+        service: PlexMediaSourceService
+    ) -> None:
+        """Test bulk disable with invalid authentication token."""
+        # Arrange
+        invalid_tokens = [None, "", "   ", "  \t\n  "]
+        
+        for invalid_token in invalid_tokens:
+            # Act & Assert
+            with pytest.raises(AuthenticationException, match="Invalid authentication token provided"):
+                _ = service.bulk_disable_all_sources(invalid_token)
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_plexapi_unauthorized_error(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test bulk disable handles PlexAPI unauthorized errors."""
+        # Arrange
+        mock_my_plex_account.side_effect = Unauthorized("Invalid token")
+        
+        # Act & Assert
+        with pytest.raises(AuthenticationException, match="Authentication failed with provided token"):
+            _ = service.bulk_disable_all_sources(mock_user.authentication_token)
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_plexapi_connection_error(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test bulk disable handles PlexAPI connection errors."""
+        # Arrange
+        mock_my_plex_account.side_effect = BadRequest("Connection failed")
+        
+        # Act & Assert
+        with pytest.raises(PlexAPIException, match="Failed to connect to Plex API"):
+            _ = service.bulk_disable_all_sources(mock_user.authentication_token)
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_empty_sources_list(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test bulk disable with empty media sources list."""
+        # Arrange
+        mock_account = Mock()
+        mock_account.onlineMediaSources.return_value = []  # pyright: ignore[reportAny]
+        mock_my_plex_account.return_value = mock_account
+        
+        # Act
+        result = service.bulk_disable_all_sources(mock_user.authentication_token)
+        
+        # Assert
+        assert result["success"] is True
+        assert result["total_requested"] == 0
+        assert result["successful_count"] == 0
+        assert result["failed_count"] == 0
+        assert len(result["disabled_sources"]) == 0
+        assert len(result["failed_sources"]) == 0
+        assert "No media sources found to disable" in result["message"]
+
+    @patch("app.services.plex_service.MyPlexAccount")
+    def test_bulk_disable_general_exception_handling(
+        self,
+        mock_my_plex_account: Mock,
+        service: PlexMediaSourceService,
+        mock_user: PlexUser
+    ) -> None:
+        """Test bulk disable handles general exceptions properly."""
+        # Arrange
+        mock_my_plex_account.side_effect = Exception("Unexpected error")
+        
+        # Act & Assert
+        with pytest.raises(PlexAPIException, match="Unexpected error during bulk operation"):
+            _ = service.bulk_disable_all_sources(mock_user.authentication_token) 

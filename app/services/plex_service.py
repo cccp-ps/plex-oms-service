@@ -12,7 +12,8 @@ Features:
 - Individual source management and bulk operations
 """
 
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, TypedDict
 
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 from plexapi.myplex import MyPlexAccount  # pyright: ignore[reportMissingTypeStubs]
@@ -26,6 +27,17 @@ from app.utils.exceptions import (
 
 if TYPE_CHECKING:
     from app.config import Settings
+
+
+class BulkOperationResult(TypedDict):
+    """Type definition for bulk operation result."""
+    success: bool
+    total_requested: int
+    successful_count: int
+    failed_count: int
+    disabled_sources: list[str]
+    failed_sources: list[str]
+    message: str
 
 
 class PlexMediaSourceService:
@@ -281,4 +293,138 @@ class PlexMediaSourceService:
             raise PlexAPIException(
                 "Unexpected error during Plex API operation",
                 original_error=e
-            ) 
+            )
+
+    def bulk_disable_all_sources(self, authentication_token: str | None) -> BulkOperationResult:
+        """
+        Bulk disable all media sources using AccountOptOut.optOut().
+        
+        Uses individual AccountOptOut.optOut() calls for each source with proper
+        retry logic and partial failure handling.
+        
+        Args:
+            authentication_token: Plex authentication token
+            
+        Returns:
+            BulkOperationResult with success/failure counts and source details
+            
+        Raises:
+            AuthenticationException: When token is invalid or authentication fails
+            PlexAPIException: When PlexAPI connection fails
+        """
+        # Validate authentication token
+        if not authentication_token or not authentication_token.strip():
+            raise AuthenticationException("Invalid authentication token provided")
+        
+        try:
+            # Create MyPlexAccount instance with the token
+            account = MyPlexAccount(token=authentication_token.strip())
+            
+            # Get online media sources from the account
+            account_opt_outs: list[object] = account.onlineMediaSources()  # pyright: ignore[reportUnknownVariableType]
+            
+            # Handle empty sources list
+            if not account_opt_outs:
+                return {
+                    "success": True,
+                    "total_requested": 0,
+                    "successful_count": 0,
+                    "failed_count": 0,
+                    "disabled_sources": [],
+                    "failed_sources": [],
+                    "message": "No media sources found to disable"
+                }
+            
+            # Initialize operation tracking
+            total_requested = len(account_opt_outs)
+            successful_count = 0
+            failed_count = 0
+            disabled_sources: list[str] = []
+            failed_sources: list[str] = []
+            
+            # Process each source with retry logic
+            for opt_out in account_opt_outs:  # pyright: ignore[reportUnknownVariableType]
+                source_key = str(getattr(opt_out, 'key', 'unknown'))  # pyright: ignore[reportUnknownArgumentType]
+                
+                # Attempt to disable the source with retry logic
+                if self._disable_source_with_retry(opt_out, source_key):  # pyright: ignore[reportUnknownArgumentType]
+                    successful_count += 1
+                    disabled_sources.append(source_key)
+                else:
+                    failed_count += 1
+                    failed_sources.append(source_key)
+            
+            # Determine overall success and generate message
+            overall_success = failed_count == 0
+            if total_requested == successful_count:
+                message = f"Successfully disabled {successful_count} media sources"
+            elif successful_count > 0:
+                message = f"Disabled {successful_count} out of {total_requested} media sources"
+            else:
+                message = "Failed to disable any media sources"
+            
+            return {
+                "success": overall_success,
+                "total_requested": total_requested,
+                "successful_count": successful_count,
+                "failed_count": failed_count,
+                "disabled_sources": disabled_sources,
+                "failed_sources": failed_sources,
+                "message": message
+            }
+            
+        except Unauthorized as e:
+            # Handle authentication errors
+            raise AuthenticationException(
+                "Authentication failed with provided token",
+                original_error=e
+            )
+        except BadRequest as e:
+            # Handle connection errors
+            raise PlexAPIException(
+                "Failed to connect to Plex API",
+                original_error=e
+            )
+        except Exception as e:
+            # Handle any other unexpected errors
+            raise PlexAPIException(
+                "Unexpected error during bulk operation",
+                original_error=e
+            )
+    
+    def _disable_source_with_retry(self, opt_out: object, source_key: str, max_retries: int = 3) -> bool:
+        """
+        Disable a single source with exponential backoff retry logic.
+        
+        Args:
+            opt_out: AccountOptOut object from PlexAPI
+            source_key: Source identifier for logging (unused but kept for API consistency)
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            True if successful, False if all retries failed
+        """
+        for attempt in range(max_retries):
+            try:
+                # Call optOut method on the AccountOptOut object
+                opt_out_method = getattr(opt_out, 'optOut', None)  # pyright: ignore[reportUnknownArgumentType]
+                if opt_out_method and callable(opt_out_method):  # pyright: ignore[reportAny]
+                    _ = opt_out_method()  # pyright: ignore[reportAny]
+                    return True
+                else:
+                    # Source doesn't have optOut method
+                    return False
+                    
+            except (BadRequest, Exception):
+                # If this is the last attempt, give up
+                if attempt == max_retries - 1:
+                    return False
+                
+                # Calculate exponential backoff delay
+                delay: float = 2.0 ** attempt  # 1s, 2s, 4s...
+                time.sleep(delay)
+                
+                # Continue to next retry attempt
+                continue
+        
+        return False 
