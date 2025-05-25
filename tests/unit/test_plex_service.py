@@ -12,8 +12,7 @@ Test Categories:
 - Privacy-focused data filtering
 """
 
-from typing import Any, cast
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
@@ -22,6 +21,8 @@ from app.config import Settings
 from app.models.plex_models import OnlineMediaSource, PlexUser
 from app.services.plex_service import PlexMediaSourceService
 from app.utils.exceptions import PlexAPIException, AuthenticationException
+
+
 
 
 class TestPlexMediaSourceService:
@@ -63,9 +64,9 @@ class TestPlexMediaSourceService:
         return mock_opt_out
 
     @pytest.fixture
-    def mock_account_opt_outs(self) -> list[Mock]:
+    def mock_account_opt_outs(self) -> list[object]:
         """Create list of mock AccountOptOut objects."""
-        mock_opt_outs = []
+        mock_opt_outs: list[object] = []
         
         # Spotify source - opted out
         spotify_opt_out = Mock()
@@ -88,10 +89,10 @@ class TestPlexMediaSourceService:
         return mock_opt_outs
 
     @pytest.fixture
-    def mock_account(self, mock_account_opt_outs: list[Mock]) -> Mock:
+    def mock_account(self, mock_account_opt_outs: list[object]) -> Mock:
         """Create mock MyPlexAccount for testing."""
         mock_account = Mock()
-        mock_account.onlineMediaSources.return_value = mock_account_opt_outs
+        mock_account.onlineMediaSources.return_value = mock_account_opt_outs  # pyright: ignore[reportAny]
         return mock_account
 
 
@@ -104,8 +105,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_my_plex_account: Mock,
         service: PlexMediaSourceService,
         mock_user: PlexUser,
-        mock_account: Mock,
-        mock_account_opt_outs: list[Mock]
+        mock_account: Mock
     ) -> None:
         """Test successful retrieval of online media sources using MyPlexAccount."""
         # Arrange
@@ -122,7 +122,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
         
         # Verify onlineMediaSources was called
-        mock_account.onlineMediaSources.assert_called_once()
+        mock_account.onlineMediaSources.assert_called_once()  # pyright: ignore[reportAny]
         
         # Verify first source is properly transformed
         first_source = result[0]
@@ -141,7 +141,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_account_opt_out.value = "opt_out"
         
         # Act
-        result = service._transform_account_opt_out(mock_account_opt_out)
+        result = service.transform_account_opt_out(mock_account_opt_out)
         
         # Assert
         assert isinstance(result, OnlineMediaSource)
@@ -161,7 +161,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_opt_out.value = "opt_in"
         
         # Act
-        result = service._transform_account_opt_out(mock_opt_out)
+        result = service.transform_account_opt_out(mock_opt_out)
         
         # Assert
         assert isinstance(result, OnlineMediaSource)
@@ -181,7 +181,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_opt_out.value = "opt_out_managed"
         
         # Act
-        result = service._transform_account_opt_out(mock_opt_out)
+        result = service.transform_account_opt_out(mock_opt_out)
         
         # Assert
         assert isinstance(result, OnlineMediaSource)
@@ -200,7 +200,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         """Test handling of empty online media sources list."""
         # Arrange
         mock_account = Mock()
-        mock_account.onlineMediaSources.return_value = []
+        mock_account.onlineMediaSources.return_value = []  # pyright: ignore[reportAny]
         mock_my_plex_account.return_value = mock_account
         
         # Act
@@ -212,7 +212,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         
         # Verify the service still works correctly with empty list
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
-        mock_account.onlineMediaSources.assert_called_once()
+        mock_account.onlineMediaSources.assert_called_once()  # pyright: ignore[reportAny]
 
     @patch("app.services.plex_service.MyPlexAccount")
     def test_handle_plexapi_connection_errors(
@@ -227,7 +227,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(PlexAPIException) as exc_info:
-            service.get_media_sources(mock_user.authentication_token)
+            _ = service.get_media_sources(mock_user.authentication_token)
         
         assert "Failed to connect to Plex API" in str(exc_info.value)
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
@@ -245,7 +245,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(AuthenticationException) as exc_info:
-            service.get_media_sources(mock_user.authentication_token)
+            _ = service.get_media_sources(mock_user.authentication_token)
         
         assert "Authentication failed" in str(exc_info.value)
         mock_my_plex_account.assert_called_once_with(token=mock_user.authentication_token)
@@ -265,7 +265,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         mock_opt_out.personal_info = {"email": "user@example.com"}
         
         # Act
-        result = service._transform_account_opt_out(mock_opt_out)
+        result = service.transform_account_opt_out(mock_opt_out)
         
         # Assert - Only essential data should be included
         assert result.identifier == "spotify"
@@ -300,7 +300,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
             mock_opt_out.value = "opt_in"
             
             # Act
-            result = service._transform_account_opt_out(mock_opt_out)
+            result = service.transform_account_opt_out(mock_opt_out)
             
             # Assert
             assert result.title == expected_title
@@ -312,19 +312,19 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         """Test handling of invalid authentication tokens."""
         # Test with None token
         with pytest.raises(AuthenticationException) as exc_info:
-            service.get_media_sources(None)  # pyright: ignore[reportArgumentType]
+            _ = service.get_media_sources(None)
         
         assert "Invalid authentication token" in str(exc_info.value)
         
         # Test with empty string token
         with pytest.raises(AuthenticationException) as exc_info:
-            service.get_media_sources("")
+            _ = service.get_media_sources("")
         
         assert "Invalid authentication token" in str(exc_info.value)
         
         # Test with whitespace-only token
         with pytest.raises(AuthenticationException) as exc_info:
-            service.get_media_sources("   ")
+            _ = service.get_media_sources("   ")
         
         assert "Invalid authentication token" in str(exc_info.value)
 
@@ -341,7 +341,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(PlexAPIException) as exc_info:
-            service.get_media_sources(mock_user.authentication_token)
+            _ = service.get_media_sources(mock_user.authentication_token)
         
         assert "Unexpected error during Plex API operation" in str(exc_info.value)
 
@@ -356,7 +356,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
         service = PlexMediaSourceService()
         
         # Assert
-        assert service._settings is mock_settings
+        assert service.settings is mock_settings
         mock_get_settings.assert_called_once()
 
     def test_source_scrobble_types_assignment(
@@ -379,7 +379,7 @@ class TestMediaSourcesRetrieval(TestPlexMediaSourceService):
             mock_opt_out.value = "opt_in"
             
             # Act
-            result = service._transform_account_opt_out(mock_opt_out)
+            result = service.transform_account_opt_out(mock_opt_out)
             
             # Assert
             assert result.scrobble_types == expected_types 

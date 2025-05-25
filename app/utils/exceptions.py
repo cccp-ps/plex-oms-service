@@ -12,7 +12,7 @@ Exception Hierarchy:
 - RateLimitException: Rate limiting errors
 """
 
-from typing import Any
+from typing import override
 
 
 class PlexAPIException(Exception):
@@ -22,6 +22,9 @@ class PlexAPIException(Exception):
     Provides a foundation for all Plex API integration errors with
     privacy-focused error messaging and optional detail preservation.
     """
+    
+    message: str
+    original_error: Exception | None
     
     def __init__(self, message: str, original_error: Exception | None = None) -> None:
         """
@@ -35,6 +38,7 @@ class PlexAPIException(Exception):
         self.message = message
         self.original_error = original_error
     
+    @override
     def __str__(self) -> str:
         """Return user-friendly error message."""
         return self.message

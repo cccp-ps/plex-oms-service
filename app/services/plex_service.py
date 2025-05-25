@@ -41,6 +41,11 @@ class PlexMediaSourceService:
         """Initialize the PlexMediaSourceService."""
         self._settings: "Settings" = settings or get_settings()
     
+    @property
+    def settings(self) -> "Settings":
+        """Get the current settings instance."""
+        return self._settings
+    
     def get_media_sources(self, authentication_token: str | None) -> list[OnlineMediaSource]:
         """
         Retrieve online media sources using MyPlexAccount.
@@ -64,12 +69,12 @@ class PlexMediaSourceService:
             account = MyPlexAccount(token=authentication_token.strip())
             
             # Get online media sources from the account
-            account_opt_outs = account.onlineMediaSources()
+            account_opt_outs: list[object] = account.onlineMediaSources()  # pyright: ignore[reportUnknownVariableType]
             
             # Transform and return the sources
             return [
-                self._transform_account_opt_out(opt_out)
-                for opt_out in account_opt_outs
+                self.transform_account_opt_out(opt_out)  # pyright: ignore[reportUnknownArgumentType]
+                for opt_out in account_opt_outs  # pyright: ignore[reportUnknownVariableType]
             ]
             
         except Unauthorized as e:
@@ -91,7 +96,7 @@ class PlexMediaSourceService:
                 original_error=e
             )
     
-    def _transform_account_opt_out(self, account_opt_out: object) -> OnlineMediaSource:
+    def transform_account_opt_out(self, account_opt_out: object) -> OnlineMediaSource:
         """
         Transform AccountOptOut object to OnlineMediaSource model.
         
