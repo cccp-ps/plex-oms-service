@@ -495,7 +495,7 @@ class PlexMediaSourceService:
                     raise
                 
                 # Calculate exponential backoff delay
-                delay = float(2 ** attempt)  # 1s, 2s, 4s...
+                delay = 2.0 ** attempt  # 1s, 2s, 4s...
                 logger.info(f"Retrying PlexAPI request after {delay}s (attempt {attempt + 1}/{max_retries})")
                 time.sleep(delay)
         
@@ -623,7 +623,7 @@ class PlexMediaSourceService:
                     raise
                 
                 # Calculate exponential backoff delay with jitter
-                base_delay = float(2 ** attempt)  # 1s, 2s, 4s...
+                base_delay = 2.0 ** attempt  # 1s, 2s, 4s...
                 jitter = random.uniform(0.5, 1.5)  # ±50% jitter
                 delay = base_delay * jitter
                 

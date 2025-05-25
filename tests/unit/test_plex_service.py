@@ -911,7 +911,7 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(PlexAPIException) as exc_info:
-            service.get_media_sources_with_rate_limiting(mock_user.authentication_token)
+            _ = service.get_media_sources_with_rate_limiting(mock_user.authentication_token)
         
         # Verify the exception was properly wrapped
         assert "Rate limit" in str(exc_info.value)
@@ -970,7 +970,7 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(PlexAPIException) as exc_info:
-            service.get_media_sources_with_timeout_handling(mock_user.authentication_token)
+            _ = service.get_media_sources_with_timeout_handling(mock_user.authentication_token)
         
         # Verify timeout error was properly handled
         assert "timeout" in str(exc_info.value).lower()
@@ -982,8 +982,7 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         self,
         mock_logger: Mock,
         mock_my_plex_account: Mock,
-        service: PlexMediaSourceService,
-        mock_user: PlexUser
+        service: PlexMediaSourceService
     ) -> None:
         """Test that errors are logged securely without exposing sensitive data."""
         from plexapi.exceptions import Unauthorized  # pyright: ignore[reportMissingTypeStubs]
@@ -995,13 +994,13 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         
         # Act
         with pytest.raises(AuthenticationException):
-            service.get_media_sources_with_secure_logging(sensitive_token)
+            _ = service.get_media_sources_with_secure_logging(sensitive_token)
         
         # Assert - Verify logging occurred without sensitive data
-        assert mock_logger.error.called
+        assert mock_logger.error.called  # pyright: ignore[reportAny]
         
         # Check that the logged message doesn't contain the sensitive token
-        logged_args = [str(arg) for call in mock_logger.error.call_args_list for arg in call[0]]
+        logged_args = [str(arg) for call in mock_logger.error.call_args_list for arg in call[0]]  # pyright: ignore[reportAny]
         for logged_message in logged_args:
             assert sensitive_token not in logged_message
             assert "***" in logged_message or "[REDACTED]" in logged_message
@@ -1055,7 +1054,7 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         
         # Act & Assert
         with pytest.raises(PlexAPIException):
-            service.get_media_sources_with_max_retries(
+            _ = service.get_media_sources_with_max_retries(
                 mock_user.authentication_token, 
                 max_retries=2
             )
@@ -1080,10 +1079,10 @@ class TestRateLimitingAndErrorHandling(TestPlexMediaSourceService):
         # Act - Make multiple calls to trigger circuit breaker
         for _ in range(5):  # Exceed circuit breaker threshold
             with pytest.raises((PlexAPIException, ConnectionException)):
-                service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
+                _ = service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
         
         # Next call should fail fast due to circuit breaker
         with pytest.raises(ConnectionException) as exc_info:
-            service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
+            _ = service.get_media_sources_with_circuit_breaker(mock_user.authentication_token)
         
         assert "circuit breaker" in str(exc_info.value).lower() or "service unavailable" in str(exc_info.value).lower() 
