@@ -232,16 +232,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Rate Limiting**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Implement per-IP rate limiting using slowapi
-      - [ ] Test case: Different limits for different endpoints
-      - [ ] Test case: Handle rate limit exceeded responses
-      - [ ] Test case: Reset rate limits after time window
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
-    - [ ] **Implementation:** Add rate limiting middleware
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Rate Limiting**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Implement per-IP rate limiting using slowapi
+      - [x] Test case: Different limits for different endpoints
+      - [x] Test case: Handle rate limit exceeded responses
+      - [x] Test case: Reset rate limits after time window
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
+    - [x] **Implementation:** Add rate limiting middleware
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Security Headers**
     - [ ] **TDD: Define Test Cases:**

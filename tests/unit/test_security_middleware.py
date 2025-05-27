@@ -219,15 +219,218 @@ class TestCSRFProtectionMiddleware:
             assert csrf_validator.validate_oauth_state(oauth_state) is False
 
     def test_csrf_middleware_with_valid_token_allows_request(self, app_with_csrf_middleware: Starlette) -> None:
-        """Test that CSRF middleware allows requests with valid tokens."""
+        """Test that CSRF middleware allows requests with valid CSRF tokens."""
         client = TestClient(app_with_csrf_middleware)
-        
-        # Generate a valid CSRF token
         csrf_validator = CSRFTokenValidator(secret_key="test-secret-key-minimum-32-chars-req")
-        valid_token = csrf_validator.generate_token()
         
-        # Test POST request with valid CSRF token
+        # Generate valid CSRF token
+        valid_token = csrf_validator.generate_token()
         headers = {"X-CSRF-Token": valid_token}
+        
+        # POST request with valid CSRF token should succeed
         response = client.post("/api/test", json={"data": "test"}, headers=headers)
         assert response.status_code == 200
-        assert response.json() == {"message": "success"} 
+        assert response.json() == {"message": "success"}
+
+
+class TestRateLimitingMiddleware:
+    """Test cases for rate limiting middleware using slowapi."""
+
+    @pytest.fixture
+    def app_with_rate_limiting(self) -> Starlette:
+        """Create test application with rate limiting middleware."""
+        # This fixture will be implemented after creating the RateLimitingMiddleware
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        async def auth_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "auth"})
+        
+        routes = [
+            Route("/api/test", test_endpoint, methods=["GET", "POST"]),
+            Route("/auth/login", auth_endpoint, methods=["POST"]),
+        ]
+        
+        # Import will be added after implementation
+        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
+        
+        # Mock the settings to avoid validation errors
+        with patch('app.middleware.security.get_settings') as mock_get_settings:
+            mock_settings = Mock()
+            mock_settings.rate_limit_enabled = True
+            mock_get_settings.return_value = mock_settings
+            
+            middleware = [
+                Middleware(
+                    RateLimitingMiddleware,
+                    default_rate_limit="10/minute",
+                    endpoint_limits={
+                        "/auth/login": "5/minute",
+                        "/api/bulk-disable": "2/minute"
+                    }
+                )
+            ]
+            
+            app = Starlette(routes=routes, middleware=middleware)
+        return app
+
+    def test_implement_per_ip_rate_limiting_using_slowapi(self, app_with_rate_limiting: Starlette) -> None:
+        """Test case: Implement per-IP rate limiting using slowapi."""
+        client = TestClient(app_with_rate_limiting)
+        
+        # Make requests within rate limit
+        for _ in range(5):  # Should be within 10/minute limit
+            response = client.get("/api/test")
+            assert response.status_code == 200
+        
+        # Simulate requests from different IP addresses
+        with patch('starlette.requests.Request.client') as mock_client:
+            # Different IP should have its own rate limit
+            mock_client.host = "192.168.1.2"  # pyright: ignore[reportAny]
+            response = client.get("/api/test")
+            assert response.status_code == 200
+
+    def test_different_limits_for_different_endpoints(self, app_with_rate_limiting: Starlette) -> None:
+        """Test case: Different limits for different endpoints."""
+        client = TestClient(app_with_rate_limiting)
+        
+        # Auth endpoint should have stricter limit (5/minute)
+        for _ in range(3):  # Should be within 5/minute limit
+            response = client.post("/auth/login", json={"username": "test"})
+            assert response.status_code == 200
+        
+        # Regular endpoint should have more relaxed limit (10/minute)
+        for _ in range(7):  # Should be within 10/minute limit
+            response = client.get("/api/test")
+            assert response.status_code == 200
+
+    def test_handle_rate_limit_exceeded_responses(self, app_with_rate_limiting: Starlette) -> None:
+        """Test case: Handle rate limit exceeded responses."""
+        client = TestClient(app_with_rate_limiting)
+        
+        # Exhaust the rate limit for auth endpoint (5/minute)
+        for _ in range(5):
+            response = client.post("/auth/login", json={"username": "test"})
+            assert response.status_code == 200
+        
+        # Next request should be rate limited
+        response = client.post("/auth/login", json={"username": "test"})
+        assert response.status_code == 429  # Too Many Requests
+        assert "rate limit exceeded" in response.json()["detail"].lower()
+        
+        # Should include Retry-After header
+        assert "Retry-After" in response.headers
+
+    def test_reset_rate_limits_after_time_window(self, app_with_rate_limiting: Starlette) -> None:
+        """Test case: Reset rate limits after time window."""
+        client = TestClient(app_with_rate_limiting)
+        
+        # Exhaust the rate limit
+        for _ in range(5):
+            response = client.post("/auth/login", json={"username": "test"})
+            assert response.status_code == 200
+        
+        # Should be rate limited
+        response = client.post("/auth/login", json={"username": "test"})
+        assert response.status_code == 429
+        
+        # Mock time advancement to simulate window reset
+        with patch('time.time') as mock_time:
+            # Advance time by 61 seconds (beyond 1 minute window)
+            mock_time.return_value = mock_time.return_value + 61
+            
+            # Should be able to make requests again
+            response = client.post("/auth/login", json={"username": "test"})
+            assert response.status_code == 200
+
+    def test_rate_limiting_respects_client_ip(self) -> None:
+        """Test that rate limiting is properly applied per client IP."""
+        # This test will verify that different IPs get separate rate limit counters
+        
+        # Import will be added after implementation
+        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET"])]
+        
+        # Mock the settings to avoid validation errors
+        with patch('app.middleware.security.get_settings') as mock_get_settings:
+            mock_settings = Mock()
+            mock_settings.rate_limit_enabled = True
+            mock_get_settings.return_value = mock_settings
+            
+            middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="2/minute")]
+            
+            app = Starlette(routes=routes, middleware=middleware)
+            client = TestClient(app)
+            
+            # IP 1 makes requests
+            with patch('starlette.requests.Request.client') as mock_client:
+                mock_client.host = "192.168.1.1"  # pyright: ignore[reportAny]
+                
+                # Exhaust limit for IP 1
+                response1 = client.get("/api/test")
+                assert response1.status_code == 200
+                response2 = client.get("/api/test")  
+                assert response2.status_code == 200
+                response3 = client.get("/api/test")
+                assert response3.status_code == 429  # Rate limited
+            
+            # IP 2 should have its own counter
+            with patch('starlette.requests.Request.client') as mock_client:
+                mock_client.host = "192.168.1.2"  # pyright: ignore[reportAny]
+                
+                response = client.get("/api/test")
+                assert response.status_code == 200  # Should not be rate limited
+
+    def test_rate_limiting_with_configuration_disabled(self) -> None:
+        """Test that rate limiting can be disabled via configuration."""
+        # Import will be added after implementation
+        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET"])]
+        
+        # Mock the settings with rate limiting disabled
+        with patch('app.middleware.security.get_settings') as mock_get_settings:
+            mock_settings = Mock()
+            mock_settings.rate_limit_enabled = False
+            mock_get_settings.return_value = mock_settings
+            
+            middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="1/minute")]
+            
+            app = Starlette(routes=routes, middleware=middleware)
+            client = TestClient(app)
+            
+            # Should be able to make many requests when disabled
+            for _ in range(10):
+                response = client.get("/api/test")
+                assert response.status_code == 200
+
+    def test_rate_limiting_error_responses_format(self, app_with_rate_limiting: Starlette) -> None:
+        """Test that rate limit error responses follow the expected format."""
+        client = TestClient(app_with_rate_limiting)
+        
+        # Exhaust rate limit
+        for _ in range(5):
+            client.post("/auth/login", json={"username": "test"})
+        
+        # Get rate limited response
+        response = client.post("/auth/login", json={"username": "test"})
+        
+        assert response.status_code == 429
+        response_data = response.json()
+        
+        # Verify error response structure
+        assert "error" in response_data
+        assert "detail" in response_data
+        assert response_data["error"] == "Too Many Requests"
+        assert "rate limit" in response_data["detail"].lower()
+        
+        # Verify headers
+        assert "Retry-After" in response.headers
+        assert int(response.headers["Retry-After"]) > 0 
