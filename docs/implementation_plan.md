@@ -220,17 +220,17 @@ The plan is organized into logical phases that build upon each other, ensuring a
 ## Phase 6: Security Middleware and Utilities
 
 - [ ] **Module: `app/middleware/security.py`**
-  - [ ] **Analyze Requirements:** Review security requirements for OAuth and API protection
-  - [ ] **Feature: CSRF Protection**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Generate and validate CSRF tokens
-      - [ ] Test case: Reject requests with invalid CSRF tokens
-      - [ ] Test case: Handle CSRF token expiration
-      - [ ] Test case: Integrate with OAuth state parameter
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_security_middleware.py`
-    - [ ] **Implementation:** Create CSRF protection middleware
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Analyze Requirements:** Review security requirements for OAuth and API protection
+  - [x] **Feature: CSRF Protection**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Generate and validate CSRF tokens
+      - [x] Test case: Reject requests with invalid CSRF tokens
+      - [x] Test case: Handle CSRF token expiration
+      - [x] Test case: Integrate with OAuth state parameter
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_security_middleware.py`
+    - [x] **Implementation:** Create CSRF protection middleware
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Rate Limiting**
     - [ ] **TDD: Define Test Cases:**
