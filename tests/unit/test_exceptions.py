@@ -11,10 +11,9 @@ Tests all custom exception functionality including:
 
 from unittest.mock import patch, MagicMock
 import json
-import logging
 import pytest
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
@@ -600,7 +599,7 @@ class TestGlobalExceptionHandlers:
                 original_error=Exception("Invalid token: secret_token_12345")
             )
             
-            response = await authentication_exception_handler(request, exception)
+            _ = await authentication_exception_handler(request, exception)
             
             # Verify logging was called
             assert mock_logger.error.called

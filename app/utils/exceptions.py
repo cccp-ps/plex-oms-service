@@ -200,19 +200,25 @@ def handle_plexapi_error(error: Exception, context: str = "PlexAPI operation") -
             original_error=error
         )
     
-    else:
-        # Handle any other unexpected errors
-        return PlexAPIException(
-            f"Unexpected error during {context}: {error_message}",
+    # Handle rate limiting (HTTP 429 or rate limit related errors)
+    elif "rate" in error_message.lower() or "429" in error_message:
+        return RateLimitException(
+            f"Rate limit exceeded during {context}",
             original_error=error
         )
+    
+    # Default to generic PlexAPI exception
+    return PlexAPIException(
+        f"PlexAPI error during {context}",
+        original_error=error
+    )
 
 
 def _sanitize_error_message(message: str) -> str:
     """
-    Sanitize error messages to prevent information disclosure.
+    Sanitize error message to prevent information leakage.
     
-    Removes sensitive information like passwords, tokens, internal hostnames, etc.
+    Removes sensitive information like server URLs, tokens, etc.
     
     Args:
         message: Original error message
@@ -220,22 +226,29 @@ def _sanitize_error_message(message: str) -> str:
     Returns:
         Sanitized error message safe for client consumption
     """
-    # Remove password patterns (more precise matching)
-    message = re.sub(r'password\s*=\s*\S+', 'password=***', message, flags=re.IGNORECASE)
-    message = re.sub(r'pwd\s*=\s*\S+', 'pwd=***', message, flags=re.IGNORECASE)
+    # Remove common sensitive patterns
+    sanitized = re.sub(
+        r'https?://[^\s]+',  # URLs
+        '[URL]',
+        message,
+        flags=re.IGNORECASE
+    )
     
-    # Remove token patterns (more precise matching)
-    message = re.sub(r'token\s*[=:]\s*\S+', 'token=***', message, flags=re.IGNORECASE)
-    message = re.sub(r'bearer\s+\S+', 'Bearer ***', message, flags=re.IGNORECASE)
+    sanitized = re.sub(
+        r'token[:\s=]+[\w\-\.]+',  # Tokens  
+        'token=[REDACTED]',
+        sanitized,
+        flags=re.IGNORECASE
+    )
     
-    # Remove internal server hostnames/IPs (more precise matching)
-    message = re.sub(r'host\s*=\s*[\w\.-]+', 'host=***', message, flags=re.IGNORECASE)
-    message = re.sub(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', '***', message)
+    sanitized = re.sub(
+        r'key[:\s=]+[\w\-\.]+',  # API keys
+        'key=[REDACTED]',
+        sanitized,
+        flags=re.IGNORECASE
+    )
     
-    # Remove database connection strings
-    message = re.sub(r'://[^/\s]*@', '://***@', message)
-    
-    return message
+    return sanitized
 
 
 def _create_error_response(
@@ -243,7 +256,7 @@ def _create_error_response(
     error_message: str,
     request: Request,
     detail: str | None = None,
-    extra_data: dict[str, Any] | None = None
+    extra_data: dict[str, Any] | None = None  # pyright: ignore[reportExplicitAny]
 ) -> JSONResponse:
     """
     Create standardized error response for FastAPI.
@@ -262,7 +275,7 @@ def _create_error_response(
     sanitized_message = _sanitize_error_message(error_message)
     
     # Build response data
-    response_data = {
+    response_data: dict[str, Any] = {  # pyright: ignore[reportExplicitAny]
         "error": sanitized_message,
         "detail": detail,
         "timestamp": datetime.now().isoformat(),
@@ -312,7 +325,7 @@ def _log_exception_securely(
         type(exception).__name__,
         request.method,
         request.url.path,
-        safe_headers,
+        str(safe_headers),
         original_error_type,
     )
 
@@ -452,7 +465,7 @@ async def pydantic_validation_exception_handler(request: Request, exc: Validatio
     _log_exception_securely(exc, request, "pydantic_validation_exception_handler")
     
     # Format validation errors for client consumption
-    validation_errors = []
+    validation_errors: list[dict[str, str]] = []
     for error in exc.errors():
         validation_errors.append({
             "field": ".".join(str(loc) for loc in error["loc"]),
