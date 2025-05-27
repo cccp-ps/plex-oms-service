@@ -209,7 +209,7 @@ def handle_plexapi_error(error: Exception, context: str = "PlexAPI operation") -
     
     # Default to generic PlexAPI exception
     return PlexAPIException(
-        f"PlexAPI error during {context}",
+        f"Unexpected error during {context}",
         original_error=error
     )
 
@@ -244,6 +244,22 @@ def _sanitize_error_message(message: str) -> str:
     sanitized = re.sub(
         r'key[:\s=]+[\w\-\.]+',  # API keys
         'key=[REDACTED]',
+        sanitized,
+        flags=re.IGNORECASE
+    )
+    
+    # Sanitize password patterns
+    sanitized = re.sub(
+        r'password[:\s=]+[\w\-\.]+',  # Passwords
+        'password=***',
+        sanitized,
+        flags=re.IGNORECASE
+    )
+    
+    # Sanitize host patterns
+    sanitized = re.sub(
+        r'host[:\s=]+[\w\-\.]+',  # Host names
+        'host=***',
         sanitized,
         flags=re.IGNORECASE
     )
@@ -310,21 +326,21 @@ def _log_exception_securely(
         handler_name: Name of the exception handler
     """
     # Create log message without sensitive headers
-    safe_headers = {
-        k: v for k, v in request.headers.items()
+    safe_headers: dict[str, str] = {
+        k: str(v) for k, v in request.headers.items()
         if k.lower() not in ["authorization", "x-api-key", "cookie"]
     }
     
     # Get original error details if available
-    original_error = getattr(exception, 'original_error', None)
-    original_error_type = type(original_error).__name__ if original_error else None
+    original_error: Exception | None = getattr(exception, 'original_error', None)
+    original_error_type: str = type(original_error).__name__ if original_error else "None"
     
     logger.error(
         "Exception handled by %s: %s at %s %s (headers: %s, original_error: %s)",
         handler_name,
         type(exception).__name__,
-        request.method,
-        request.url.path,
+        str(request.method),
+        str(request.url.path),
         str(safe_headers),
         original_error_type,
     )
