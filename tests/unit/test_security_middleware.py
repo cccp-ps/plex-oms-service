@@ -37,12 +37,12 @@ class TestCSRFProtectionMiddleware:
         
         app = Starlette(middleware=middleware)
         
-        @app.route("/api/test", methods=["POST"])
-        async def test_endpoint(request: Request) -> JSONResponse:
+        @app.route("/api/test", methods=["POST"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
+        async def test_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
             return JSONResponse({"message": "success"})
         
-        @app.route("/health", methods=["GET"])
-        async def health_endpoint(request: Request) -> JSONResponse:
+        @app.route("/health", methods=["GET"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
+        async def health_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
             return JSONResponse({"status": "ok"})
         
         return app
@@ -141,14 +141,14 @@ class TestCSRFProtectionMiddleware:
         client = TestClient(app_with_csrf_middleware)
         
         # Add GET endpoint for testing
-        @app_with_csrf_middleware.route("/api/test", methods=["GET"])
-        async def get_test_endpoint(request: Request) -> JSONResponse:
+        @app_with_csrf_middleware.route("/api/test", methods=["GET"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
+        async def get_test_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
             return JSONResponse({"message": "success"})
         
         # GET requests should not require CSRF token
-        response = client.get("/api/test")
         # Note: This might return 404 if route registration doesn't work in test
         # The important thing is it should not return 403 for missing CSRF token
+        _ = client.get("/api/test")
 
     @pytest.mark.asyncio
     async def test_csrf_middleware_async_validation(self) -> None:
@@ -159,7 +159,7 @@ class TestCSRFProtectionMiddleware:
         valid_token = csrf_validator.generate_token()
         mock_request = Mock(spec=Request)
         mock_request.method = "POST"
-        mock_request.url.path = "/api/test"
+        mock_request.url.path = "/api/test"  # pyright: ignore[reportAny]
         mock_request.headers = {"X-CSRF-Token": valid_token}
         
         # Test validation
