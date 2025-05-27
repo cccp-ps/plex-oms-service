@@ -11,6 +11,7 @@ from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+from starlette.routing import Route
 from starlette.testclient import TestClient
 
 from app.middleware.security import CSRFProtectionMiddleware, CSRFTokenValidator
@@ -27,6 +28,17 @@ class TestCSRFProtectionMiddleware:
     @pytest.fixture
     def app_with_csrf_middleware(self) -> Starlette:
         """Create test application with CSRF middleware."""
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        async def health_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"status": "ok"})
+        
+        routes = [
+            Route("/api/test", test_endpoint, methods=["POST"]),
+            Route("/health", health_endpoint, methods=["GET"]),
+        ]
+        
         middleware = [
             Middleware(
                 CSRFProtectionMiddleware,
@@ -35,16 +47,7 @@ class TestCSRFProtectionMiddleware:
             )
         ]
         
-        app = Starlette(middleware=middleware)
-        
-        @app.route("/api/test", methods=["POST"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
-        async def test_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-            return JSONResponse({"message": "success"})
-        
-        @app.route("/health", methods=["GET"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
-        async def health_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-            return JSONResponse({"status": "ok"})
-        
+        app = Starlette(routes=routes, middleware=middleware)
         return app
 
     def test_generate_and_validate_csrf_tokens(self, csrf_validator: CSRFTokenValidator) -> None:
@@ -136,19 +139,34 @@ class TestCSRFProtectionMiddleware:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
 
-    def test_csrf_middleware_allows_safe_methods(self, app_with_csrf_middleware: Starlette) -> None:
+    def test_csrf_middleware_allows_safe_methods(self) -> None:
         """Test that CSRF middleware allows safe HTTP methods without token validation."""
-        client = TestClient(app_with_csrf_middleware)
-        
-        # Add GET endpoint for testing
-        @app_with_csrf_middleware.route("/api/test", methods=["GET"])  # pyright: ignore[reportUntypedFunctionDecorator,reportUnknownMemberType]
-        async def get_test_endpoint(_request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        async def get_test_endpoint(_request: Request) -> JSONResponse:
             return JSONResponse({"message": "success"})
         
+        async def post_test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [
+            Route("/api/test", get_test_endpoint, methods=["GET"]),
+            Route("/api/test", post_test_endpoint, methods=["POST"]),
+        ]
+        
+        middleware = [
+            Middleware(
+                CSRFProtectionMiddleware,
+                secret_key="test-secret-key-minimum-32-chars-req",
+                excluded_paths=["/health", "/auth/login"]
+            )
+        ]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
         # GET requests should not require CSRF token
-        # Note: This might return 404 if route registration doesn't work in test
-        # The important thing is it should not return 403 for missing CSRF token
-        _ = client.get("/api/test")
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        assert response.json() == {"message": "success"}
 
     @pytest.mark.asyncio
     async def test_csrf_middleware_async_validation(self) -> None:
