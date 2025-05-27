@@ -254,18 +254,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `app/utils/exceptions.py`**
-  - [ ] **Analyze Requirements:** Define custom exceptions for PlexAPI and authentication errors
-  - [ ] **Feature: Custom Exception Classes**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: PlexAPI connection exceptions
-      - [ ] Test case: Authentication failure exceptions
-      - [ ] Test case: Authorization (permission) exceptions
-      - [ ] Test case: Rate limiting exceptions
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_exceptions.py`
-    - [ ] **Implementation:** Create custom exception hierarchy
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/utils/exceptions.py`**
+  - [x] **Analyze Requirements:** Define custom exceptions for PlexAPI and authentication errors
+  - [x] **Feature: Custom Exception Classes**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: PlexAPI connection exceptions
+      - [x] Test case: Authentication failure exceptions
+      - [x] Test case: Authorization (permission) exceptions
+      - [x] Test case: Rate limiting exceptions
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_exceptions.py`
+    - [x] **Implementation:** Create custom exception hierarchy
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Global Exception Handlers**
     - [ ] **TDD: Define Test Cases:**
