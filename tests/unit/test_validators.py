@@ -8,7 +8,6 @@ Follows TDD principles with comprehensive test coverage for security-critical va
 """
 
 import pytest
-from urllib.parse import parse_qs, urlparse
 
 from app.utils.validators import (
     validate_oauth_state,
@@ -35,24 +34,24 @@ class TestOAuthStateValidation:
         short_state = "too_short"
         
         with pytest.raises(ValidationError, match="State parameter must be at least 32 characters"):
-            validate_oauth_state(short_state)
+            _ = validate_oauth_state(short_state)
 
     def test_empty_state_parameter_fails_validation(self) -> None:
         """Test that empty state parameters fail validation."""
         with pytest.raises(ValidationError, match="State parameter cannot be empty"):
-            validate_oauth_state("")
+            _ = validate_oauth_state("")
 
     def test_none_state_parameter_fails_validation(self) -> None:
         """Test that None state parameters fail validation."""
         with pytest.raises(ValidationError, match="State parameter cannot be empty"):
-            validate_oauth_state(None)
+            _ = validate_oauth_state(None)
 
     def test_whitespace_only_state_fails_validation(self) -> None:
         """Test that whitespace-only state parameters fail validation."""
         whitespace_state = "   \t\n   "
         
         with pytest.raises(ValidationError, match="State parameter cannot be empty"):
-            validate_oauth_state(whitespace_state)
+            _ = validate_oauth_state(whitespace_state)
 
     def test_state_with_invalid_characters_fails_validation(self) -> None:
         """Test that state parameters with invalid characters fail validation."""
@@ -60,21 +59,21 @@ class TestOAuthStateValidation:
         invalid_state = "This has spaces and special chars!"
         
         with pytest.raises(ValidationError, match="State parameter contains invalid characters"):
-            validate_oauth_state(invalid_state)
+            _ = validate_oauth_state(invalid_state)
 
     def test_sql_injection_in_state_fails_validation(self) -> None:
         """Test that potential SQL injection attempts in state fail validation."""
         sql_injection_state = "'; DROP TABLE users; --"
         
         with pytest.raises(ValidationError, match="State parameter contains invalid characters"):
-            validate_oauth_state(sql_injection_state)
+            _ = validate_oauth_state(sql_injection_state)
 
     def test_script_injection_in_state_fails_validation(self) -> None:
         """Test that potential script injection attempts in state fail validation."""
         script_injection_state = "<script>alert('xss')</script>"
         
         with pytest.raises(ValidationError, match="State parameter contains invalid characters"):
-            validate_oauth_state(script_injection_state)
+            _ = validate_oauth_state(script_injection_state)
 
 
 class TestPlexTokenFormatValidation:
@@ -93,17 +92,17 @@ class TestPlexTokenFormatValidation:
         short_token = "too_short"
         
         with pytest.raises(ValidationError, match="Plex token must be at least 20 characters"):
-            validate_plex_token_format(short_token)
+            _ = validate_plex_token_format(short_token)
 
     def test_empty_plex_token_fails_validation(self) -> None:
         """Test that empty tokens fail validation."""
         with pytest.raises(ValidationError, match="Plex token cannot be empty"):
-            validate_plex_token_format("")
+            _ = validate_plex_token_format("")
 
     def test_none_plex_token_fails_validation(self) -> None:
         """Test that None tokens fail validation."""
         with pytest.raises(ValidationError, match="Plex token cannot be empty"):
-            validate_plex_token_format(None)
+            _ = validate_plex_token_format(None)
 
     def test_plex_token_with_invalid_characters_fails_validation(self) -> None:
         """Test that tokens with invalid characters fail validation."""
@@ -111,14 +110,14 @@ class TestPlexTokenFormatValidation:
         invalid_token = "invalid-token-with-dashes!"
         
         with pytest.raises(ValidationError, match="Plex token contains invalid characters"):
-            validate_plex_token_format(invalid_token)
+            _ = validate_plex_token_format(invalid_token)
 
     def test_plex_token_with_spaces_fails_validation(self) -> None:
         """Test that tokens with spaces fail validation."""
         token_with_spaces = "token with spaces in middle"
         
         with pytest.raises(ValidationError, match="Plex token contains invalid characters"):
-            validate_plex_token_format(token_with_spaces)
+            _ = validate_plex_token_format(token_with_spaces)
 
     def test_plex_token_too_long_fails_validation(self) -> None:
         """Test that excessively long tokens fail validation."""
@@ -126,7 +125,7 @@ class TestPlexTokenFormatValidation:
         long_token = "a" * 201
         
         with pytest.raises(ValidationError, match="Plex token is too long"):
-            validate_plex_token_format(long_token)
+            _ = validate_plex_token_format(long_token)
 
 
 class TestRedirectUriValidation:
@@ -151,45 +150,45 @@ class TestRedirectUriValidation:
         invalid_uri = "ftp://example.com/callback"
         
         with pytest.raises(ValidationError, match="Redirect URI must use HTTP or HTTPS scheme"):
-            validate_redirect_uri(invalid_uri)
+            _ = validate_redirect_uri(invalid_uri)
 
     def test_empty_redirect_uri_fails_validation(self) -> None:
         """Test that empty URIs fail validation."""
         with pytest.raises(ValidationError, match="Redirect URI cannot be empty"):
-            validate_redirect_uri("")
+            _ = validate_redirect_uri("")
 
     def test_none_redirect_uri_fails_validation(self) -> None:
         """Test that None URIs fail validation."""
         with pytest.raises(ValidationError, match="Redirect URI cannot be empty"):
-            validate_redirect_uri(None)
+            _ = validate_redirect_uri(None)
 
     def test_malformed_uri_fails_validation(self) -> None:
         """Test that malformed URIs fail validation."""
         malformed_uri = "not-a-valid-uri"
         
         with pytest.raises(ValidationError, match="Invalid redirect URI format"):
-            validate_redirect_uri(malformed_uri)
+            _ = validate_redirect_uri(malformed_uri)
 
     def test_uri_with_fragment_fails_validation(self) -> None:
         """Test that URIs with fragments fail validation for security."""
         uri_with_fragment = "https://example.com/callback#fragment"
         
         with pytest.raises(ValidationError, match="Redirect URI cannot contain fragments"):
-            validate_redirect_uri(uri_with_fragment)
+            _ = validate_redirect_uri(uri_with_fragment)
 
     def test_http_non_localhost_fails_validation(self) -> None:
         """Test that HTTP URIs for non-localhost fail validation."""
         insecure_uri = "http://example.com/callback"
         
         with pytest.raises(ValidationError, match="HTTP redirect URIs are only allowed for localhost"):
-            validate_redirect_uri(insecure_uri)
+            _ = validate_redirect_uri(insecure_uri)
 
     def test_uri_with_credentials_fails_validation(self) -> None:
         """Test that URIs with embedded credentials fail validation."""
         uri_with_creds = "https://user:pass@example.com/callback"
         
         with pytest.raises(ValidationError, match="Redirect URI cannot contain credentials"):
-            validate_redirect_uri(uri_with_creds)
+            _ = validate_redirect_uri(uri_with_creds)
 
 
 class TestCallbackParameterSanitization:
@@ -237,11 +236,10 @@ class TestCallbackParameterSanitization:
         sanitized = sanitize_callback_parameters(params)
         
         # Should only contain safe alphanumeric characters
-        for key, value in sanitized.items():
-            if value is not None:
-                assert "DROP" not in str(value)
-                assert "UNION" not in str(value)
-                assert "SELECT" not in str(value)
+        for _, value in sanitized.items():
+            assert "DROP" not in str(value)
+            assert "UNION" not in str(value)
+            assert "SELECT" not in str(value)
 
     def test_empty_parameters_are_handled_correctly(self) -> None:
         """Test that empty parameter dictionaries are handled correctly."""
@@ -301,7 +299,6 @@ class TestCallbackParameterSanitization:
         
         # These dangerous patterns should be completely removed
         for value in sanitized.values():
-            if value is not None:
-                assert "data:" not in str(value)
-                assert "vbscript:" not in str(value)
-                assert "file://" not in str(value) 
+            assert "data:" not in str(value)
+            assert "vbscript:" not in str(value)
+            assert "file://" not in str(value) 
