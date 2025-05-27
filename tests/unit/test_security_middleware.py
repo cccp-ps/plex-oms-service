@@ -588,7 +588,7 @@ class TestSecurityHeadersMiddleware:
         assert "X-Powered-By" not in response.headers
         
         # Verify that we don't expose FastAPI/Uvicorn version information
-        server_header = response.headers.get("Server", "")
+        server_header = cast(str, response.headers.get("Server", ""))
         assert "uvicorn" not in server_header.lower()
         assert "fastapi" not in server_header.lower()
         assert "starlette" not in server_header.lower()
