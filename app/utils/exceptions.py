@@ -209,7 +209,7 @@ def handle_plexapi_error(error: Exception, context: str = "PlexAPI operation") -
     
     # Default to generic PlexAPI exception
     return PlexAPIException(
-        f"Unexpected error during {context}",
+        f"Unexpected error during {context}: {_sanitize_error_message(str(error))}",
         original_error=error
     )
 
