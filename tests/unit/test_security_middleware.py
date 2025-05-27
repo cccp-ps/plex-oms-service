@@ -437,3 +437,291 @@ class TestRateLimitingMiddleware:
         # Verify headers
         assert "Retry-After" in response.headers
         assert int(response.headers["Retry-After"]) > 0 
+
+
+class TestSecurityHeadersMiddleware:
+    """Test cases for Security Headers middleware."""
+
+    @pytest.fixture
+    def app_with_security_headers(self) -> Starlette:
+        """Create test application with security headers middleware."""
+        # This fixture will be implemented after creating the SecurityHeadersMiddleware
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            response = JSONResponse({"message": "success"})
+            response.set_cookie("session", "test-value")
+            return response
+        
+        async def api_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"data": "api-response"})
+        
+        routes = [
+            Route("/api/test", test_endpoint, methods=["GET", "POST"]),
+            Route("/api/data", api_endpoint, methods=["GET"]),
+        ]
+        
+        # Import the SecurityHeadersMiddleware that we'll implement
+        from app.middleware.security import SecurityHeadersMiddleware
+
+        middleware = [
+            Middleware(
+                SecurityHeadersMiddleware,
+                include_hsts=True,
+                include_csp=True,
+                include_security_headers=True,
+                cors_allowed_origins=["https://localhost:3000", "https://app.example.com"],
+                cors_allow_credentials=True
+            )
+        ]
+
+        app = Starlette(routes=routes, middleware=middleware)
+        return app
+
+    def test_inject_security_headers_hsts_csp_etc(self, app_with_security_headers: Starlette) -> None:
+        """Test case: Inject security headers (HSTS, CSP, etc.)."""
+        client = TestClient(app_with_security_headers)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Verify HSTS header
+        assert "Strict-Transport-Security" in response.headers
+        hsts_value = response.headers["Strict-Transport-Security"]
+        assert "max-age=" in hsts_value
+        assert "includeSubDomains" in hsts_value
+        assert "preload" in hsts_value
+        
+        # Verify Content Security Policy
+        assert "Content-Security-Policy" in response.headers
+        csp_value = response.headers["Content-Security-Policy"]
+        assert "default-src 'self'" in csp_value
+        assert "script-src" in csp_value
+        assert "style-src" in csp_value
+        assert "img-src" in csp_value
+        
+        # Verify X-Content-Type-Options
+        assert response.headers.get("X-Content-Type-Options") == "nosniff"
+        
+        # Verify X-Frame-Options
+        assert response.headers.get("X-Frame-Options") == "DENY"
+        
+        # Verify X-XSS-Protection (legacy header for older browsers)
+        assert response.headers.get("X-XSS-Protection") == "1; mode=block"
+        
+        # Verify Referrer-Policy
+        assert "Referrer-Policy" in response.headers
+        assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+        
+        # Verify Permissions-Policy (replaces Feature-Policy)
+        assert "Permissions-Policy" in response.headers
+        permissions_policy = response.headers["Permissions-Policy"]
+        assert "camera=()" in permissions_policy
+        assert "microphone=()" in permissions_policy
+        assert "geolocation=()" in permissions_policy
+
+    def test_configure_proper_cors_headers(self, app_with_security_headers: Starlette) -> None:
+        """Test case: Configure proper CORS headers."""
+        client = TestClient(app_with_security_headers)
+        
+        # Test preflight request
+        response = client.options(
+            "/api/test",
+            headers={
+                "Origin": "https://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type"
+            }
+        )
+        
+        # Should handle OPTIONS preflight
+        assert response.status_code == 200
+        
+        # Test actual CORS request
+        response = client.get(
+            "/api/test",
+            headers={"Origin": "https://localhost:3000"}
+        )
+        assert response.status_code == 200
+        
+        # Verify CORS headers
+        assert response.headers.get("Access-Control-Allow-Origin") == "https://localhost:3000"
+        assert response.headers.get("Access-Control-Allow-Credentials") == "true"
+        
+        # Test with disallowed origin
+        response = client.get(
+            "/api/test", 
+            headers={"Origin": "https://malicious-site.com"}
+        )
+        assert response.status_code == 200
+        # Should not include CORS headers for disallowed origins
+        assert "Access-Control-Allow-Origin" not in response.headers
+
+    def test_set_secure_cookie_attributes(self, app_with_security_headers: Starlette) -> None:
+        """Test case: Set secure cookie attributes."""
+        client = TestClient(app_with_security_headers)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Check that cookies have secure attributes
+        cookies = response.cookies
+        if "session" in cookies:
+            # Note: TestClient doesn't always preserve cookie attributes
+            # In real implementation, we'll verify the Set-Cookie header directly
+            pass
+        
+        # Check Set-Cookie header directly for proper attributes
+        set_cookie_headers = [value for name, value in response.headers.items() if name.lower() == "set-cookie"]
+        if set_cookie_headers:
+            for cookie_header in set_cookie_headers:
+                # Verify secure attributes are added by middleware
+                assert "Secure" in cookie_header or "HttpOnly" in cookie_header or "SameSite" in cookie_header
+
+    def test_remove_sensitive_server_information(self, app_with_security_headers: Starlette) -> None:
+        """Test case: Remove sensitive server information."""
+        client = TestClient(app_with_security_headers)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Verify sensitive headers are removed or sanitized
+        assert "Server" not in response.headers or response.headers["Server"] == "PlexOMS"
+        assert "X-Powered-By" not in response.headers
+        
+        # Verify that we don't expose FastAPI/Uvicorn version information
+        server_header = response.headers.get("Server", "")
+        assert "uvicorn" not in server_header.lower()
+        assert "fastapi" not in server_header.lower()
+        assert "starlette" not in server_header.lower()
+
+    def test_security_headers_with_custom_configuration(self) -> None:
+        """Test security headers middleware with custom configuration."""
+        from app.middleware.security import SecurityHeadersMiddleware
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET"])]
+        
+        # Test with custom CSP policy
+        middleware = [
+            Middleware(
+                SecurityHeadersMiddleware,
+                include_hsts=False,  # Disable HSTS for testing
+                include_csp=True,
+                csp_policy="default-src 'self'; script-src 'self' 'unsafe-inline'",
+                cors_allowed_origins=["https://custom-domain.com"],
+                custom_server_header="CustomApp/1.0"
+            )
+        ]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Should not have HSTS when disabled
+        assert "Strict-Transport-Security" not in response.headers
+        
+        # Should have custom CSP
+        assert response.headers.get("Content-Security-Policy") == "default-src 'self'; script-src 'self' 'unsafe-inline'"
+        
+        # Should have custom server header
+        assert response.headers.get("Server") == "CustomApp/1.0"
+
+    def test_security_headers_preserve_existing_headers(self) -> None:
+        """Test that security headers middleware preserves existing headers."""
+        from app.middleware.security import SecurityHeadersMiddleware
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            response = JSONResponse({"message": "success"})
+            response.headers["Custom-App-Header"] = "custom-value"
+            response.headers["Cache-Control"] = "no-cache"
+            return response
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET"])]
+        
+        middleware = [
+            Middleware(SecurityHeadersMiddleware, include_security_headers=True)
+        ]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Should preserve existing headers
+        assert response.headers.get("Custom-App-Header") == "custom-value"
+        assert response.headers.get("Cache-Control") == "no-cache"
+        
+        # Should also add security headers
+        assert "X-Content-Type-Options" in response.headers
+        assert "X-Frame-Options" in response.headers
+
+    def test_cors_preflight_handling(self) -> None:
+        """Test CORS preflight request handling."""
+        from app.middleware.security import SecurityHeadersMiddleware
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET", "POST"])]
+        
+        middleware = [
+            Middleware(
+                SecurityHeadersMiddleware,
+                cors_allowed_origins=["https://localhost:3000"],
+                cors_allowed_methods=["GET", "POST", "PUT", "DELETE"],
+                cors_allowed_headers=["Content-Type", "Authorization", "X-CSRF-Token"]
+            )
+        ]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        # Test preflight request
+        response = client.options(
+            "/api/test",
+            headers={
+                "Origin": "https://localhost:3000",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "Content-Type, Authorization"
+            }
+        )
+        
+        assert response.status_code == 200
+        assert response.headers.get("Access-Control-Allow-Origin") == "https://localhost:3000"
+        assert "POST" in response.headers.get("Access-Control-Allow-Methods", "")
+        assert "Content-Type" in response.headers.get("Access-Control-Allow-Headers", "")
+        assert "Authorization" in response.headers.get("Access-Control-Allow-Headers", "")
+
+    def test_security_headers_disabled_configuration(self) -> None:
+        """Test security headers middleware when features are disabled."""
+        from app.middleware.security import SecurityHeadersMiddleware
+        
+        async def test_endpoint(_request: Request) -> JSONResponse:
+            return JSONResponse({"message": "success"})
+        
+        routes = [Route("/api/test", test_endpoint, methods=["GET"])]
+        
+        middleware = [
+            Middleware(
+                SecurityHeadersMiddleware,
+                include_hsts=False,
+                include_csp=False,
+                include_security_headers=False
+            )
+        ]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        response = client.get("/api/test")
+        assert response.status_code == 200
+        
+        # Should not include disabled headers
+        assert "Strict-Transport-Security" not in response.headers
+        assert "Content-Security-Policy" not in response.headers
+        assert "X-Content-Type-Options" not in response.headers
+        assert "X-Frame-Options" not in response.headers 

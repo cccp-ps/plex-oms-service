@@ -515,3 +515,332 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         response.headers["Retry-After"] = str(retry_after)
         
         return response 
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """
+    Security headers middleware for FastAPI/Starlette applications.
+    
+    Provides comprehensive security headers including HSTS, CSP, CORS,
+    secure cookie attributes, and server information sanitization.
+    """
+    
+    def __init__(
+        self,
+        app: ASGIApp,
+        include_hsts: bool = True,
+        include_csp: bool = True,
+        include_security_headers: bool = True,
+        hsts_max_age: int = 31536000,  # 1 year
+        hsts_include_subdomains: bool = True,
+        hsts_preload: bool = True,
+        csp_policy: str | None = None,
+        cors_allowed_origins: list[str] | None = None,
+        cors_allowed_methods: list[str] | None = None,
+        cors_allowed_headers: list[str] | None = None,
+        cors_allow_credentials: bool = False,
+        cors_max_age: int = 86400,  # 24 hours
+        custom_server_header: str | None = None,
+        secure_cookies: bool = True
+    ) -> None:
+        """
+        Initialize security headers middleware.
+        
+        Args:
+            app: ASGI application
+            include_hsts: Whether to include HSTS header
+            include_csp: Whether to include Content Security Policy
+            include_security_headers: Whether to include general security headers
+            hsts_max_age: HSTS max-age in seconds
+            hsts_include_subdomains: Include subdomains in HSTS
+            hsts_preload: Include preload directive in HSTS
+            csp_policy: Custom CSP policy (uses default if None)
+            cors_allowed_origins: List of allowed CORS origins
+            cors_allowed_methods: List of allowed CORS methods
+            cors_allowed_headers: List of allowed CORS headers
+            cors_allow_credentials: Allow credentials in CORS
+            cors_max_age: CORS preflight cache max-age
+            custom_server_header: Custom server header value
+            secure_cookies: Whether to secure cookie attributes
+        """
+        super().__init__(app)
+        
+        self.include_hsts: bool = include_hsts
+        self.include_csp: bool = include_csp
+        self.include_security_headers: bool = include_security_headers
+        self.hsts_max_age: int = hsts_max_age
+        self.hsts_include_subdomains: bool = hsts_include_subdomains
+        self.hsts_preload: bool = hsts_preload
+        self.cors_allowed_origins: list[str] = cors_allowed_origins or []
+        self.cors_allowed_methods: list[str] = cors_allowed_methods or ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+        self.cors_allowed_headers: list[str] = cors_allowed_headers or ["Content-Type", "Authorization", "X-CSRF-Token"]
+        self.cors_allow_credentials: bool = cors_allow_credentials
+        self.cors_max_age: int = cors_max_age
+        self.custom_server_header: str | None = custom_server_header
+        self.secure_cookies: bool = secure_cookies
+        
+        # Default CSP policy if none provided
+        self.csp_policy: str = csp_policy or self._get_default_csp_policy()
+    
+    def _get_default_csp_policy(self) -> str:
+        """
+        Get default Content Security Policy.
+        
+        Returns:
+            Default CSP policy string
+        """
+        return (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "font-src 'self'; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+    
+    @override
+    async def dispatch(
+        self, 
+        request: Request, 
+        call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        """
+        Process request through security headers middleware.
+        
+        Args:
+            request: Incoming request
+            call_next: Next middleware/handler in chain
+            
+        Returns:
+            Response with security headers applied
+        """
+        # Handle CORS preflight requests
+        if request.method == "OPTIONS" and self._is_cors_preflight(request):
+            return self._handle_cors_preflight(request)
+        
+        # Process request through next middleware/handler
+        response = await call_next(request)
+        
+        # Apply security headers
+        self._apply_security_headers(response)
+        
+        # Apply CORS headers for actual requests
+        self._apply_cors_headers(request, response)
+        
+        # Secure cookies
+        if self.secure_cookies:
+            self._secure_cookies(response)
+        
+        # Sanitize server information
+        self._sanitize_server_headers(response)
+        
+        return response
+    
+    def _is_cors_preflight(self, request: Request) -> bool:
+        """
+        Check if request is a CORS preflight request.
+        
+        Args:
+            request: Incoming request
+            
+        Returns:
+            True if preflight request, False otherwise
+        """
+        return (
+            request.method == "OPTIONS" and
+            "Origin" in request.headers and
+            "Access-Control-Request-Method" in request.headers
+        )
+    
+    def _handle_cors_preflight(self, request: Request) -> Response:
+        """
+        Handle CORS preflight request.
+        
+        Args:
+            request: CORS preflight request
+            
+        Returns:
+            CORS preflight response
+        """
+        origin = request.headers.get("Origin")
+        
+        # Check if origin is allowed
+        if not self._is_origin_allowed(origin):
+            return Response(status_code=403)
+        
+        # Create preflight response
+        response = Response(status_code=200)
+        
+        # Set CORS preflight headers
+        if origin is not None:  # Type guard for mypy
+            response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = ", ".join(self.cors_allowed_methods)
+        response.headers["Access-Control-Allow-Headers"] = ", ".join(self.cors_allowed_headers)
+        response.headers["Access-Control-Max-Age"] = str(self.cors_max_age)
+        
+        if self.cors_allow_credentials:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+        return response
+    
+    def _is_origin_allowed(self, origin: str | None) -> bool:
+        """
+        Check if origin is allowed for CORS.
+        
+        Args:
+            origin: Origin header value
+            
+        Returns:
+            True if origin is allowed, False otherwise
+        """
+        if not origin or not self.cors_allowed_origins:
+            return False
+        
+        return origin in self.cors_allowed_origins
+    
+    def _apply_security_headers(self, response: Response) -> None:
+        """
+        Apply general security headers to response.
+        
+        Args:
+            response: Response to modify
+        """
+        if not self.include_security_headers:
+            return
+        
+        # X-Content-Type-Options
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        
+        # X-Frame-Options
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        # X-XSS-Protection (legacy header for older browsers)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        
+        # Referrer-Policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        
+        # Permissions-Policy (replaces Feature-Policy)
+        permissions_policy = (
+            "camera=(), microphone=(), geolocation=(), "
+            "interest-cohort=(), browsing-topics=()"
+        )
+        response.headers["Permissions-Policy"] = permissions_policy
+        
+        # Apply HSTS if enabled
+        if self.include_hsts:
+            hsts_value = f"max-age={self.hsts_max_age}"
+            if self.hsts_include_subdomains:
+                hsts_value += "; includeSubDomains"
+            if self.hsts_preload:
+                hsts_value += "; preload"
+            response.headers["Strict-Transport-Security"] = hsts_value
+        
+        # Apply CSP if enabled
+        if self.include_csp and self.csp_policy:
+            response.headers["Content-Security-Policy"] = self.csp_policy
+    
+    def _apply_cors_headers(self, request: Request, response: Response) -> None:
+        """
+        Apply CORS headers to response for actual requests.
+        
+        Args:
+            request: Incoming request
+            response: Response to modify
+        """
+        origin = request.headers.get("Origin")
+        
+        if not self._is_origin_allowed(origin):
+            return
+        
+        # Set CORS headers
+        if origin is not None:  # Type guard for mypy
+            response.headers["Access-Control-Allow-Origin"] = origin
+        
+        if self.cors_allow_credentials:
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+        
+        # Expose headers that client can access
+        response.headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Type"
+    
+    def _secure_cookies(self, response: Response) -> None:
+        """
+        Add secure attributes to cookies.
+        
+        Args:
+            response: Response to modify
+        """
+        if not hasattr(response, 'headers'):
+            return
+        
+        # Get all Set-Cookie headers using proper Starlette method
+        set_cookie_headers: list[str] = []
+        for name, value in response.headers.items():
+            if name.lower() == "set-cookie":
+                set_cookie_headers.append(value)
+        
+        if not set_cookie_headers:
+            return
+        
+        # Remove existing Set-Cookie headers
+        try:
+            del response.headers["set-cookie"]
+        except KeyError:
+            pass
+        
+        # Re-add with secure attributes
+        for cookie_header in set_cookie_headers:
+            secured_cookie = self._add_secure_cookie_attributes(cookie_header)
+            response.headers.append("Set-Cookie", secured_cookie)
+    
+    def _add_secure_cookie_attributes(self, cookie_header: str) -> str:
+        """
+        Add secure attributes to a cookie header.
+        
+        Args:
+            cookie_header: Original cookie header
+            
+        Returns:
+            Cookie header with secure attributes
+        """
+        # Don't modify if already has security attributes
+        if "Secure" in cookie_header and "HttpOnly" in cookie_header and "SameSite" in cookie_header:
+            return cookie_header
+        
+        parts = [cookie_header.rstrip(";")]
+        
+        # Add HttpOnly if not present
+        if "HttpOnly" not in cookie_header:
+            parts.append("HttpOnly")
+        
+        # Add Secure if not present (only for HTTPS)
+        if "Secure" not in cookie_header:
+            parts.append("Secure")
+        
+        # Add SameSite if not present
+        if "SameSite" not in cookie_header:
+            parts.append("SameSite=Strict")
+        
+        return "; ".join(parts)
+    
+    def _sanitize_server_headers(self, response: Response) -> None:
+        """
+        Sanitize server information headers.
+        
+        Args:
+            response: Response to modify
+        """
+        # Remove or replace sensitive headers
+        try:
+            del response.headers["x-powered-by"]
+        except KeyError:
+            pass
+        
+        # Set custom server header or default
+        if self.custom_server_header:
+            response.headers["Server"] = self.custom_server_header
+        else:
+            response.headers["Server"] = "PlexOMS" 

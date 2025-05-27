@@ -243,16 +243,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Security Headers**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Inject security headers (HSTS, CSP, etc.)
-      - [ ] Test case: Configure proper CORS headers
-      - [ ] Test case: Set secure cookie attributes
-      - [ ] Test case: Remove sensitive server information
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
-    - [ ] **Implementation:** Add security headers middleware
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Security Headers**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Inject security headers (HSTS, CSP, etc.)
+      - [x] Test case: Configure proper CORS headers
+      - [x] Test case: Set secure cookie attributes
+      - [x] Test case: Remove sensitive server information
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_security_middleware.py`
+    - [x] **Implementation:** Add security headers middleware
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 - [ ] **Module: `app/utils/exceptions.py`**
   - [ ] **Analyze Requirements:** Define custom exceptions for PlexAPI and authentication errors
