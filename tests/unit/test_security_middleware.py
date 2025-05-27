@@ -6,6 +6,7 @@ for the Plex Online Media Sources Manager.
 """
 
 import pytest
+from typing import cast
 from unittest.mock import Mock, patch
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -251,15 +252,15 @@ class TestRateLimitingMiddleware:
             Route("/auth/login", auth_endpoint, methods=["POST"]),
         ]
         
-        # Import will be added after implementation
-        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
-        
+        # Import the implemented RateLimitingMiddleware
+        from app.middleware.security import RateLimitingMiddleware
+
         # Mock the settings to avoid validation errors
         with patch('app.middleware.security.get_settings') as mock_get_settings:
             mock_settings = Mock()
             mock_settings.rate_limit_enabled = True
             mock_get_settings.return_value = mock_settings
-            
+
             middleware = [
                 Middleware(
                     RateLimitingMiddleware,
@@ -270,23 +271,23 @@ class TestRateLimitingMiddleware:
                     }
                 )
             ]
-            
+
             app = Starlette(routes=routes, middleware=middleware)
         return app
 
     def test_implement_per_ip_rate_limiting_using_slowapi(self, app_with_rate_limiting: Starlette) -> None:
         """Test case: Implement per-IP rate limiting using slowapi."""
         client = TestClient(app_with_rate_limiting)
-        
+
         # Make requests within rate limit
         for _ in range(5):  # Should be within 10/minute limit
             response = client.get("/api/test")
             assert response.status_code == 200
-        
+
         # Simulate requests from different IP addresses
         with patch('starlette.requests.Request.client') as mock_client:
             # Different IP should have its own rate limit
-            mock_client.host = "192.168.1.2"  # pyright: ignore[reportAny]
+            mock_client.host = "192.168.1.2"
             response = client.get("/api/test")
             assert response.status_code == 200
 
@@ -316,7 +317,8 @@ class TestRateLimitingMiddleware:
         # Next request should be rate limited
         response = client.post("/auth/login", json={"username": "test"})
         assert response.status_code == 429  # Too Many Requests
-        assert "rate limit exceeded" in response.json()["detail"].lower()
+        response_json = cast(dict[str, str], response.json())
+        assert "rate limit exceeded" in response_json["detail"].lower()
         
         # Should include Retry-After header
         assert "Retry-After" in response.headers
@@ -337,7 +339,8 @@ class TestRateLimitingMiddleware:
         # Mock time advancement to simulate window reset
         with patch('time.time') as mock_time:
             # Advance time by 61 seconds (beyond 1 minute window)
-            mock_time.return_value = mock_time.return_value + 61
+            current_time = cast(float, mock_time.return_value)
+            mock_time.return_value = current_time + 61
             
             # Should be able to make requests again
             response = client.post("/auth/login", json={"username": "test"})
@@ -347,8 +350,8 @@ class TestRateLimitingMiddleware:
         """Test that rate limiting is properly applied per client IP."""
         # This test will verify that different IPs get separate rate limit counters
         
-        # Import will be added after implementation
-        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
+        # Import the implemented RateLimitingMiddleware
+        from app.middleware.security import RateLimitingMiddleware
         
         async def test_endpoint(_request: Request) -> JSONResponse:
             return JSONResponse({"message": "success"})
@@ -368,7 +371,7 @@ class TestRateLimitingMiddleware:
             
             # IP 1 makes requests
             with patch('starlette.requests.Request.client') as mock_client:
-                mock_client.host = "192.168.1.1"  # pyright: ignore[reportAny]
+                mock_client.host = "192.168.1.1"
                 
                 # Exhaust limit for IP 1
                 response1 = client.get("/api/test")
@@ -380,15 +383,15 @@ class TestRateLimitingMiddleware:
             
             # IP 2 should have its own counter
             with patch('starlette.requests.Request.client') as mock_client:
-                mock_client.host = "192.168.1.2"  # pyright: ignore[reportAny]
+                mock_client.host = "192.168.1.2"
                 
                 response = client.get("/api/test")
                 assert response.status_code == 200  # Should not be rate limited
 
     def test_rate_limiting_with_configuration_disabled(self) -> None:
         """Test that rate limiting can be disabled via configuration."""
-        # Import will be added after implementation
-        from app.middleware.security import RateLimitingMiddleware  # pyright: ignore[reportMissingImports]
+        # Import the implemented RateLimitingMiddleware
+        from app.middleware.security import RateLimitingMiddleware
         
         async def test_endpoint(_request: Request) -> JSONResponse:
             return JSONResponse({"message": "success"})
@@ -417,13 +420,13 @@ class TestRateLimitingMiddleware:
         
         # Exhaust rate limit
         for _ in range(5):
-            client.post("/auth/login", json={"username": "test"})
+            _ = client.post("/auth/login", json={"username": "test"})
         
         # Get rate limited response
         response = client.post("/auth/login", json={"username": "test"})
         
         assert response.status_code == 429
-        response_data = response.json()
+        response_data = cast(dict[str, str], response.json())
         
         # Verify error response structure
         assert "error" in response_data

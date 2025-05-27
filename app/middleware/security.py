@@ -346,9 +346,12 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             # Rate limit not exceeded, proceed with request
             return await call_next(request)
             
-        except RateLimitExceeded as e:
+        except Exception as e:
             # Rate limit exceeded, return error response
-            return self._create_rate_limit_response(e)
+            if isinstance(e, RateLimitExceeded) or e.__class__.__name__ == "CustomRateLimitExceeded":
+                return self._create_rate_limit_response(e)
+            else:
+                raise  # Re-raise non-rate-limit exceptions
     
     def _get_rate_limit_for_path(self, path: str) -> str | None:
         """
@@ -408,17 +411,25 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         
         # Check the rate limit using the initialized rate limiter
         try:
-            if not self._rate_limiter.test(rate_limit_obj, full_key):  # pyright: ignore[reportArgumentType]
+            if not self._rate_limiter.test(rate_limit_obj, full_key):
                 # Rate limit exceeded
                 _ = self._calculate_retry_after(rate_limit)  # Store in _ to avoid unused warning
-                raise RateLimitExceeded(f"Rate limit exceeded: {rate_limit}")
+                # Create our own rate limit exception to avoid type issues
+                class CustomRateLimitExceeded(Exception):
+                    rate_limit: str
+                    
+                    def __init__(self, message: str, rate_limit: str) -> None:
+                        super().__init__(message)
+                        self.rate_limit = rate_limit
+                
+                raise CustomRateLimitExceeded(f"Rate limit exceeded: {rate_limit}", rate_limit)
             
             # Hit the rate limit (consume one request)
-            _ = self._rate_limiter.hit(rate_limit_obj, full_key)  # pyright: ignore[reportArgumentType]
+            _ = self._rate_limiter.hit(rate_limit_obj, full_key)
         except Exception as e:
             # If rate limiting fails for any reason, log and continue
             # In production, you might want to handle this differently
-            if isinstance(e, RateLimitExceeded):
+            if isinstance(e, RateLimitExceeded) or e.__class__.__name__ == "CustomRateLimitExceeded":
                 raise  # Re-raise rate limit exceeded
             # For other exceptions, allow the request to proceed
     
@@ -470,7 +481,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         
         return period_map[period]
     
-    def _create_rate_limit_response(self, exception: RateLimitExceeded) -> JSONResponse:
+    def _create_rate_limit_response(self, exception: Exception) -> JSONResponse:
         """
         Create a JSON response for rate limit exceeded.
         
