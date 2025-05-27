@@ -278,18 +278,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `app/utils/validators.py`**
-  - [ ] **Analyze Requirements:** Define validation utilities for OAuth and request data
-  - [ ] **Feature: OAuth Validation**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Validate OAuth state parameter
-      - [ ] Test case: Validate Plex token format
-      - [ ] Test case: Validate redirect URIs
-      - [ ] Test case: Sanitize callback parameters
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/unit/test_validators.py`
-    - [ ] **Implementation:** Create OAuth validation functions
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/utils/validators.py`**
+  - [x] **Analyze Requirements:** Define validation utilities for OAuth and request data
+  - [x] **Feature: OAuth Validation**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Validate OAuth state parameter
+      - [x] Test case: Validate Plex token format
+      - [x] Test case: Validate redirect URIs
+      - [x] Test case: Sanitize callback parameters
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/unit/test_validators.py`
+    - [x] **Implementation:** Create OAuth validation functions
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 7: API Routes
 
