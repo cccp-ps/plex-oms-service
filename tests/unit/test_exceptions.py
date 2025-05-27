@@ -6,9 +6,17 @@ Tests all custom exception functionality including:
 - PlexAPI error mapping and transformation 
 - Privacy-focused error handling
 - Exception hierarchy correctness
+- Global FastAPI exception handlers
 """
 
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+import json
+import logging
+import pytest
+
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from app.utils.exceptions import (
     PlexAPIException,
@@ -401,3 +409,282 @@ class TestExceptionHierarchy:
         exceptions = [auth_exc, authz_exc, conn_exc, rate_exc, valid_exc]
         for exc in exceptions:
             assert isinstance(exc, PlexAPIException) 
+
+
+class TestGlobalExceptionHandlers:
+    """Test global FastAPI exception handlers."""
+
+    @pytest.mark.asyncio
+    async def test_handle_plexapi_exceptions_with_user_friendly_messages(self) -> None:
+        """Test case: Handle PlexAPI exceptions with user-friendly messages."""
+        # Mock request for testing
+        request = MagicMock(spec=Request)
+        request.method = "GET"
+        request.url = MagicMock()
+        request.url.path = "/api/test"
+        request.headers = {}
+        
+        # Test PlexAPIException handling - should return 500 with user-friendly message
+        from app.utils.exceptions import plexapi_exception_handler
+        exception = PlexAPIException("Connection to Plex server failed")
+        
+        response = await plexapi_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 500
+        
+        # Parse response content
+        response_content = response.body
+        response_data = json.loads(response_content)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Connection to Plex server failed"
+        assert response_data["detail"] is None  # No sensitive details exposed
+        assert "timestamp" in response_data
+
+    @pytest.mark.asyncio
+    async def test_handle_authentication_exceptions_with_proper_http_status(self) -> None:
+        """Test case: Handle authentication exceptions with proper HTTP status."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/auth/login"
+        request.headers = {}
+        
+        # Test AuthenticationException handling - should return 401
+        from app.utils.exceptions import authentication_exception_handler
+        exception = AuthenticationException("Authentication failed")
+        
+        response = await authentication_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 401
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Authentication failed"
+        assert "timestamp" in response_data
+
+    @pytest.mark.asyncio
+    async def test_handle_authorization_exceptions_with_proper_http_status(self) -> None:
+        """Test case: Handle authorization exceptions with proper HTTP status."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "GET"
+        request.url = MagicMock()
+        request.url.path = "/api/media-sources"
+        request.headers = {}
+        
+        # Test AuthorizationException handling - should return 403
+        from app.utils.exceptions import authorization_exception_handler
+        exception = AuthorizationException("Insufficient permissions")
+        
+        response = await authorization_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 403
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Insufficient permissions"
+
+    @pytest.mark.asyncio
+    async def test_handle_validation_exceptions(self) -> None:
+        """Test case: Handle validation exceptions."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/api/media-sources/toggle"
+        request.headers = {}
+        
+        # Test ValidationException handling - should return 422
+        from app.utils.exceptions import validation_exception_handler
+        exception = ValidationException("Invalid media source ID format")
+        
+        response = await validation_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 422
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Invalid media source ID format"
+
+    @pytest.mark.asyncio
+    async def test_handle_pydantic_validation_errors(self) -> None:
+        """Test case: Handle Pydantic validation errors with proper formatting."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/api/test"
+        request.headers = {}
+        
+        # Create a mock ValidationError
+        mock_error = MagicMock(spec=ValidationError)
+        mock_error.errors.return_value = [
+            {
+                "loc": ("field_name",),
+                "msg": "field required",
+                "type": "value_error.missing"
+            }
+        ]
+        
+        from app.utils.exceptions import pydantic_validation_exception_handler
+        response = await pydantic_validation_exception_handler(request, mock_error)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 422
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert "error" in response_data
+        assert "validation_errors" in response_data
+
+    @pytest.mark.asyncio
+    async def test_handle_connection_exceptions(self) -> None:
+        """Test case: Handle connection exceptions with appropriate status."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "GET"
+        request.url = MagicMock()
+        request.url.path = "/api/media-sources"
+        request.headers = {}
+        
+        # Test ConnectionException handling - should return 503
+        from app.utils.exceptions import connection_exception_handler
+        exception = ConnectionException("Unable to reach Plex server")
+        
+        response = await connection_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 503
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Unable to reach Plex server"
+
+    @pytest.mark.asyncio
+    async def test_handle_rate_limit_exceptions(self) -> None:
+        """Test case: Handle rate limit exceptions with retry information."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/api/media-sources/disable-all"
+        request.headers = {}
+        
+        # Test RateLimitException handling - should return 429
+        from app.utils.exceptions import rate_limit_exception_handler
+        exception = RateLimitException("Too many requests, please try again later")
+        
+        response = await rate_limit_exception_handler(request, exception)
+        
+        assert isinstance(response, JSONResponse)
+        assert response.status_code == 429
+        
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        assert response_data["error"] == "Too many requests, please try again later"
+        assert "retry_after" in response_data
+
+    @pytest.mark.asyncio
+    async def test_log_errors_without_exposing_sensitive_information(self) -> None:
+        """Test case: Log errors without exposing sensitive information."""
+        # Mock request with sensitive information
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/auth/callback"
+        request.headers = {"authorization": "Bearer secret_token_12345"}
+        
+        # Mock logger
+        with patch('app.utils.exceptions.logger') as mock_logger:
+            from app.utils.exceptions import authentication_exception_handler
+            exception = AuthenticationException(
+                "Authentication failed", 
+                original_error=Exception("Invalid token: secret_token_12345")
+            )
+            
+            response = await authentication_exception_handler(request, exception)
+            
+            # Verify logging was called
+            assert mock_logger.error.called
+            
+            # Check the call arguments
+            call_args = mock_logger.error.call_args
+            assert len(call_args[0]) >= 6  # Should have 6 positional args for the format string
+            
+            # Check that handler name is in the log
+            assert "authentication_exception_handler" in call_args[0][1]
+            
+            # Check that exception type is logged
+            assert "AuthenticationException" in call_args[0][2]
+            
+            # Check that headers don't contain sensitive auth info
+            headers_arg = call_args[0][5]  # The headers dictionary
+            assert "authorization" not in headers_arg
+
+    @pytest.mark.asyncio
+    async def test_exception_handler_preserves_request_id(self) -> None:
+        """Test case: Exception handlers preserve request ID for tracing."""
+        # Mock request with request ID
+        request = MagicMock(spec=Request)
+        request.method = "GET"
+        request.url = MagicMock()
+        request.url.path = "/api/media-sources"
+        request.headers = {"x-request-id": "req_12345"}
+        
+        from app.utils.exceptions import plexapi_exception_handler
+        exception = PlexAPIException("Test error")
+        
+        response = await plexapi_exception_handler(request, exception)
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        
+        # Should include request ID in response for debugging
+        assert "request_id" in response_data
+        assert response_data["request_id"] == "req_12345"
+
+    @pytest.mark.asyncio
+    async def test_exception_handlers_include_timestamp(self) -> None:
+        """Test case: Exception handlers include timestamp for debugging."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "GET"
+        request.url = MagicMock()
+        request.url.path = "/api/test"
+        request.headers = {}
+        
+        from app.utils.exceptions import plexapi_exception_handler
+        exception = PlexAPIException("Test error")
+        
+        with patch('app.utils.exceptions.datetime') as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2024-01-01T12:00:00"
+            
+            response = await plexapi_exception_handler(request, exception)
+            response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+            
+            assert "timestamp" in response_data
+            assert response_data["timestamp"] == "2024-01-01T12:00:00"
+
+    @pytest.mark.asyncio
+    async def test_exception_handlers_sanitize_error_messages(self) -> None:
+        """Test case: Exception handlers sanitize error messages to prevent information disclosure."""
+        # Mock request
+        request = MagicMock(spec=Request)
+        request.method = "POST"
+        request.url = MagicMock()
+        request.url.path = "/api/test"
+        request.headers = {}
+        
+        # Create exception with potentially sensitive information
+        from app.utils.exceptions import plexapi_exception_handler
+        exception = PlexAPIException("Database connection failed: password=secret123, host=internal.server.com")
+        
+        response = await plexapi_exception_handler(request, exception)
+        response_data = json.loads(response.body)  # pyright: ignore[reportArgumentType]
+        
+        # Should sanitize the error message
+        assert "secret123" not in response_data["error"]
+        assert "internal.server.com" not in response_data["error"]
+        
+        # Check that password and host values are masked
+        assert "password=***" in response_data["error"]
+        assert "host=***" in response_data["error"]
+        
+        # But should still be informative
+        assert "connection failed" in response_data["error"].lower() 

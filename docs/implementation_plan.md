@@ -267,16 +267,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Global Exception Handlers**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Handle PlexAPI exceptions with user-friendly messages
-      - [ ] Test case: Handle authentication exceptions with proper HTTP status
-      - [ ] Test case: Handle validation exceptions
-      - [ ] Test case: Log errors without exposing sensitive information
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/unit/test_exceptions.py`
-    - [ ] **Implementation:** Create FastAPI exception handlers
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Global Exception Handlers**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Handle PlexAPI exceptions with user-friendly messages
+      - [x] Test case: Handle authentication exceptions with proper HTTP status
+      - [x] Test case: Handle validation exceptions
+      - [x] Test case: Log errors without exposing sensitive information
+    - [x] **TDD: Write Failing Tests:** Add to `tests/unit/test_exceptions.py`
+    - [x] **Implementation:** Create FastAPI exception handlers
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 - [ ] **Module: `app/utils/validators.py`**
   - [ ] **Analyze Requirements:** Define validation utilities for OAuth and request data
