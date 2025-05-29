@@ -450,18 +450,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `frontend/src/hooks/useAuth.tsx`**
-  - [ ] **Analyze Requirements:** Create authentication hook for components
-  - [ ] **Feature: Authentication Hook**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Provide authentication state and methods
-      - [ ] Test case: Handle OAuth flow initiation and completion
-      - [ ] Test case: Manage secure token storage
-      - [ ] Test case: Handle automatic token refresh
-    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useAuth.test.tsx`
-    - [ ] **Implementation:** Create useAuth hook with authentication methods
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `frontend/src/hooks/useAuth.tsx`**
+  - [x] **Analyze Requirements:** Create authentication hook for components
+  - [x] **Feature: Authentication Hook**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Provide authentication state and methods
+      - [x] Test case: Handle OAuth flow initiation and completion
+      - [x] Test case: Manage secure token storage
+      - [x] Test case: Handle automatic token refresh
+    - [x] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useAuth.test.tsx`
+    - [x] **Implementation:** Create useAuth hook with authentication methods
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 - [ ] **Module: `frontend/src/hooks/useMediaSources.tsx`**
   - [ ] **Analyze Requirements:** Create media sources data management hook
