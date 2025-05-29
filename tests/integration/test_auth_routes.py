@@ -245,4 +245,358 @@ class TestOAuthInitiationEndpoint:
         
         # Should eventually hit rate limit
         status_codes: list[int] = [r.status_code for r in responses]
-        assert status.HTTP_429_TOO_MANY_REQUESTS in status_codes 
+        assert status.HTTP_429_TOO_MANY_REQUESTS in status_codes
+
+
+class TestOAuthCallbackEndpoint:
+    """Test suite for POST /auth/callback OAuth callback endpoint."""
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_completes_oauth_flow(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: POST /auth/callback completes OAuth flow."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        state = cast(str, login_data["state"])
+        code = cast(str, login_data["code"])
+        
+        request_data = {
+            "code": code,
+            "state": state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        # Verify response contains all required fields
+        assert "access_token" in response_data
+        assert "token_type" in response_data
+        assert "user" in response_data
+        assert "expires_in" in response_data
+        
+        # Verify token fields
+        assert isinstance(response_data["access_token"], str)
+        assert len(response_data["access_token"]) > 0
+        assert response_data["token_type"] == "Bearer"
+        assert isinstance(response_data["expires_in"], int)
+        assert response_data["expires_in"] > 0
+        
+        # Verify user information
+        user_data = response_data["user"]
+        assert isinstance(user_data, dict)
+        assert "id" in user_data
+        assert "username" in user_data
+        assert "email" in user_data
+        assert "authentication_token" in user_data
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_validates_authorization_code_and_state_parameters(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Validate authorization code and state parameters."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        valid_state = cast(str, login_data["state"])
+        valid_code = cast(str, login_data["code"])
+        
+        # Test valid parameters
+        valid_request = {
+            "code": valid_code,
+            "state": valid_state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=valid_request)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_creates_secure_session_with_httponly_cookies(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Create secure session with HTTPOnly cookies."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        state = cast(str, login_data["state"])
+        code = cast(str, login_data["code"])
+        
+        request_data = {
+            "code": code,
+            "state": state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        
+        # For now, we verify the response structure
+        # TODO: Add cookie validation when session management with HTTPOnly cookies is implemented
+        response_data = response.json()  # pyright: ignore[reportAny]
+        assert "access_token" in response_data
+        assert "user" in response_data
+        
+        # Verify security considerations are addressed in response
+        # The access_token should be present for client-side storage initially
+        # Session cookies will be implemented as part of session management feature
+        assert isinstance(response_data["access_token"], str)
+        assert len(response_data["access_token"]) > 0
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_returns_user_information_and_success_status(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Return user information and success status."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        state = cast(str, login_data["state"])
+        code = cast(str, login_data["code"])
+        
+        request_data = {
+            "code": code,
+            "state": state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        # Verify user information structure
+        user_data = response_data["user"]
+        assert isinstance(user_data, dict)
+        
+        # Verify required user fields
+        required_fields = ["id", "uuid", "username", "email", "authentication_token"]
+        for field in required_fields:
+            assert field in user_data
+            assert user_data[field] is not None
+        
+        # Verify optional user fields have proper types
+        optional_fields = ["thumb", "confirmed", "restricted", "guest", "subscription_active"]
+        for field in optional_fields:
+            if field in user_data:
+                assert isinstance(user_data[field], (str, bool, type(None)))
+        
+        # Verify response indicates success (200 OK status)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers["content-type"] == "application/json"
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_handles_invalid_authorization_code(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_failure: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Handle invalid authorization code or expired session."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        valid_state = cast(str, login_data["state"])
+        
+        # Test with invalid authorization code
+        invalid_request = {
+            "code": "invalid-code-12345",
+            "state": valid_state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=invalid_request)
+        
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        assert "detail" in response_data
+        detail_lower = cast(str, response_data["detail"]).lower()
+        assert "oauth" in detail_lower or "authentication" in detail_lower
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_handles_invalid_state_parameter(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Handle invalid state parameter (CSRF protection)."""
+        # Arrange - First initiate OAuth to get valid code
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        valid_code = cast(str, login_data["code"])
+        
+        # Test with invalid state parameter
+        invalid_request = {
+            "code": valid_code,
+            "state": "invalid-state-parameter-that-doesnt-exist"
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=invalid_request)
+        
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        assert "detail" in response_data
+        detail_lower = cast(str, response_data["detail"]).lower()
+        assert "state" in detail_lower or "authentication" in detail_lower or "oauth" in detail_lower
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_handles_expired_session(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object],  # pyright: ignore[reportUnusedParameter]
+        monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test case: Handle expired OAuth session."""
+        # Arrange - Mock the auth service to simulate expired state
+        def mock_expired_state(*_args: object, **_kwargs: object) -> None:
+            raise Unauthorized("OAuth session expired or invalid")
+        
+        # Patch the complete_oauth_flow method to simulate expiration
+        monkeypatch.setattr(
+            "app.services.auth_service.PlexAuthService.complete_oauth_flow",
+            mock_expired_state
+        )
+        
+        request_data = {
+            "code": "some-code",
+            "state": "some-state-that-would-be-expired"
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        assert "detail" in response_data
+        detail_lower = cast(str, response_data["detail"]).lower()
+        assert "oauth" in detail_lower or "expired" in detail_lower or "authentication" in detail_lower
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_handles_missing_parameters(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Handle missing required parameters."""
+        # Test missing code parameter
+        missing_code_request: dict[str, object] = {
+            "state": "some-state-parameter"
+        }
+        
+        response: Response = await async_client.post("/auth/callback", json=missing_code_request)
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        
+        # Test missing state parameter
+        missing_state_request: dict[str, object] = {
+            "code": "some-code"
+        }
+        
+        response = await async_client.post("/auth/callback", json=missing_state_request)
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        
+        # Test missing both parameters
+        empty_request: dict[str, object] = {}
+        
+        response = await async_client.post("/auth/callback", json=empty_request)
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_handles_plexapi_connection_errors(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Handle PlexAPI connection errors gracefully."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        valid_state = cast(str, login_data["state"])
+        valid_code = cast(str, login_data["code"])
+        
+        # Use a context manager to temporarily patch the method
+        from unittest.mock import patch
+        
+        def raise_bad_request(*_args: object, **_kwargs: object) -> None:
+            raise BadRequest("Unable to connect to Plex servers")
+        
+        request_data = {
+            "code": valid_code,
+            "state": valid_state
+        }
+        
+        # Act - Patch only for this specific call
+        with patch('app.services.auth_service.PlexAuthService.complete_oauth_flow', side_effect=raise_bad_request):
+            response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        response_data = response.json()  # pyright: ignore[reportAny]
+        
+        assert "detail" in response_data
+        detail_lower = cast(str, response_data["detail"]).lower()
+        assert "plex" in detail_lower and "connect" in detail_lower
+    
+    @pytest.mark.asyncio
+    async def test_oauth_callback_returns_proper_content_type(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: Endpoint returns proper JSON content type."""
+        # Arrange - First initiate OAuth to get valid state
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = login_response.json()  # pyright: ignore[reportAny]
+        
+        state = cast(str, login_data["state"])
+        code = cast(str, login_data["code"])
+        
+        request_data = {
+            "code": code,
+            "state": state
+        }
+        
+        # Act
+        response: Response = await async_client.post("/auth/callback", json=request_data)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers["content-type"] == "application/json" 

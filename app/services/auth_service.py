@@ -55,6 +55,12 @@ class PlexPinLoginProtocol(Protocol):
     def waitForLogin(self) -> bool: ...
 
 
+# Shared state storage for OAuth states (temporary solution for testing)
+# In production, this would be replaced with Redis, database, or session storage
+_shared_pending_states: set[str] = set()
+_shared_state_timestamps: dict[str, float] = {}
+
+
 class PlexAuthService:
     """
     Plex OAuth authentication service.
@@ -65,13 +71,17 @@ class PlexAuthService:
     
     This service is designed with privacy-first principles and follows security 
     best practices for OAuth implementation.
+    
+    Note: Currently uses shared state storage for testing. In production, this should
+    be replaced with persistent storage like Redis or database-backed sessions.
     """
     
     def __init__(self, settings: "Settings | None" = None) -> None:
         """Initialize the PlexAuthService with secure state management."""
         self._settings: "Settings" = settings or get_settings()
-        self._pending_states: set[str] = set()
-        self._state_timestamps: dict[str, float] = {}
+        # Use shared state storage for cross-instance state persistence
+        self._pending_states: set[str] = _shared_pending_states
+        self._state_timestamps: dict[str, float] = _shared_state_timestamps
         self._state_ttl: int = 600  # 10 minutes TTL for state parameters
     
     def initiate_oauth_flow(self, forward_url: str | None = None) -> dict[str, str]:
@@ -174,6 +184,9 @@ class PlexAuthService:
         for state in expired_states:
             self._pending_states.discard(state)
             _ = self._state_timestamps.pop(state, None)
+            # Also clean up from shared storage
+            _shared_pending_states.discard(state)
+            _ = _shared_state_timestamps.pop(state, None)
     
     def complete_oauth_flow(self, code: str, state: str) -> dict[str, object]:
         """
@@ -323,6 +336,9 @@ class PlexAuthService:
         """
         self._pending_states.discard(state)
         _ = self._state_timestamps.pop(state, None)
+        # Also clean up from shared storage
+        _shared_pending_states.discard(state)
+        _ = _shared_state_timestamps.pop(state, None)
     
     def _convert_account_to_user(self, account: object) -> PlexUser:
         """

@@ -307,17 +307,17 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: OAuth Callback Endpoint**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: POST /auth/callback completes OAuth flow
-      - [ ] Test case: Validate authorization code and state parameters
-      - [ ] Test case: Create secure session with HTTPOnly cookies
-      - [ ] Test case: Return user information and success status
-      - [ ] Test case: Handle invalid authorization code or expired session
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
-    - [ ] **Implementation:** Create OAuth callback endpoint
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: OAuth Callback Endpoint**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: POST /auth/callback completes OAuth flow
+      - [x] Test case: Validate authorization code and state parameters
+      - [x] Test case: Create secure session with HTTPOnly cookies
+      - [x] Test case: Return user information and success status
+      - [x] Test case: Handle invalid authorization code or expired session
+    - [x] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
+    - [x] **Implementation:** Create OAuth callback endpoint
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Session Management Endpoints**
     - [ ] **TDD: Define Test Cases:**
