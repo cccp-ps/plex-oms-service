@@ -27,6 +27,44 @@ UserData = dict[str, object]
 ErrorResponseData = dict[str, str]
 
 
+async def create_authenticated_client(async_client: AsyncClient) -> tuple[AsyncClient, dict[str, str]]:
+    """
+    Helper function to create an authenticated client with session cookies.
+    Returns a new client with cookies set and the session cookies dict.
+    """
+    # Complete OAuth flow to get session cookies
+    login_response: Response = await async_client.post("/auth/login", json={})
+    assert login_response.status_code == status.HTTP_200_OK
+    login_data = cast(OAuthInitiationResponseData, login_response.json())
+    
+    callback_response: Response = await async_client.post(
+        "/auth/callback",
+        json={
+            "code": cast(str, login_data["code"]),
+            "state": cast(str, login_data["state"])
+        }
+    )
+    assert callback_response.status_code == status.HTTP_200_OK
+    
+    # Extract session cookies from callback response
+    session_cookies: dict[str, str] = {}
+    for cookie_header in callback_response.headers.get_list("set-cookie"):
+        if "plex_session_token" in cookie_header:
+            # Parse cookie value
+            cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+            name, value = cookie_parts.split("=", 1)
+            session_cookies[name] = value
+    
+    # Create new client with cookies set at client level
+    authenticated_client = AsyncClient(
+        transport=async_client._transport,
+        base_url=async_client.base_url,
+        cookies=session_cookies
+    )
+    
+    return authenticated_client, session_cookies
+
+
 class TestOAuthInitiationEndpoint:
     """Test suite for POST /auth/login OAuth initiation endpoint."""
     
@@ -624,32 +662,11 @@ class TestSessionManagementEndpoints:
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Test case: GET /auth/me returns current user information when authenticated."""
-        # Arrange - First complete OAuth flow to authenticate
-        login_response: Response = await async_client.post("/auth/login", json={})
-        assert login_response.status_code == status.HTTP_200_OK
-        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        # Arrange - Create authenticated client using helper
+        authenticated_client, _session_cookies = await create_authenticated_client(async_client)
         
-        # Complete OAuth callback to get authenticated
-        callback_response: Response = await async_client.post(
-            "/auth/callback",
-            json={
-                "code": cast(str, login_data["code"]),
-                "state": cast(str, login_data["state"])
-            }
-        )
-        assert callback_response.status_code == status.HTTP_200_OK
-        
-        # Extract session cookies from callback response
-        session_cookies: dict[str, str] = {}
-        for cookie_header in callback_response.headers.get_list("set-cookie"):
-            if "plex_session_token" in cookie_header:
-                # Parse cookie value
-                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
-                name, value = cookie_parts.split("=", 1)
-                session_cookies[name] = value
-        
-        # Act - Get current user information with session cookies
-        response: Response = await async_client.get("/auth/me", cookies=session_cookies)
+        # Act - Get current user information with authenticated client
+        response: Response = await authenticated_client.get("/auth/me")
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -669,6 +686,9 @@ class TestSessionManagementEndpoints:
         for field in required_fields:
             assert field in user_data
             assert user_data[field] is not None
+        
+        # Clean up the authenticated client
+        await authenticated_client.aclose()
     
     @pytest.mark.asyncio
     async def test_get_current_user_information_when_unauthenticated(
@@ -698,32 +718,11 @@ class TestSessionManagementEndpoints:
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Test case: POST /auth/refresh refreshes authentication token successfully."""
-        # Arrange - First complete OAuth flow to authenticate
-        login_response: Response = await async_client.post("/auth/login", json={})
-        assert login_response.status_code == status.HTTP_200_OK
-        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        # Arrange - Create authenticated client using helper
+        authenticated_client, _session_cookies = await create_authenticated_client(async_client)
         
-        # Complete OAuth callback to get authenticated
-        callback_response: Response = await async_client.post(
-            "/auth/callback",
-            json={
-                "code": cast(str, login_data["code"]),
-                "state": cast(str, login_data["state"])
-            }
-        )
-        assert callback_response.status_code == status.HTTP_200_OK
-        
-        # Extract session cookies from callback response
-        session_cookies: dict[str, str] = {}
-        for cookie_header in callback_response.headers.get_list("set-cookie"):
-            if "plex_session_token" in cookie_header:
-                # Parse cookie value
-                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
-                name, value = cookie_parts.split("=", 1)
-                session_cookies[name] = value
-        
-        # Act - Refresh token with session cookies
-        response: Response = await async_client.post("/auth/refresh", cookies=session_cookies)
+        # Act - Refresh token with authenticated client
+        response: Response = await authenticated_client.post("/auth/refresh")
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -746,6 +745,9 @@ class TestSessionManagementEndpoints:
         # Verify user information is still available
         assert "user" in response_data
         assert response_data["user"] is not None
+        
+        # Clean up the authenticated client
+        await authenticated_client.aclose()
     
     @pytest.mark.asyncio
     async def test_refresh_authentication_token_when_unauthenticated(
@@ -771,32 +773,11 @@ class TestSessionManagementEndpoints:
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Test case: POST /auth/logout clears session and cookies."""
-        # Arrange - First complete OAuth flow to authenticate
-        login_response: Response = await async_client.post("/auth/login", json={})
-        assert login_response.status_code == status.HTTP_200_OK
-        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        # Arrange - Create authenticated client using helper
+        authenticated_client, _session_cookies = await create_authenticated_client(async_client)
         
-        # Complete OAuth callback to get authenticated
-        callback_response: Response = await async_client.post(
-            "/auth/callback",
-            json={
-                "code": cast(str, login_data["code"]),
-                "state": cast(str, login_data["state"])
-            }
-        )
-        assert callback_response.status_code == status.HTTP_200_OK
-        
-        # Extract session cookies from callback response
-        session_cookies: dict[str, str] = {}
-        for cookie_header in callback_response.headers.get_list("set-cookie"):
-            if "plex_session_token" in cookie_header:
-                # Parse cookie value
-                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
-                name, value = cookie_parts.split("=", 1)
-                session_cookies[name] = value
-        
-        # Act - Logout with session cookies
-        response: Response = await async_client.post("/auth/logout", cookies=session_cookies)
+        # Act - Logout with authenticated client
+        response: Response = await authenticated_client.post("/auth/logout")
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -821,6 +802,9 @@ class TestSessionManagementEndpoints:
                 if "Max-Age=0" in cookie or "expires=" in cookie.lower()
             ]
             assert len(cleared_cookies) > 0
+        
+        # Clean up the authenticated client
+        await authenticated_client.aclose()
     
     @pytest.mark.asyncio
     async def test_logout_when_unauthenticated(
@@ -850,32 +834,11 @@ class TestSessionManagementEndpoints:
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
         """Test case: After logout, GET /auth/me returns unauthenticated status."""
-        # Arrange - First complete OAuth flow to authenticate
-        login_response: Response = await async_client.post("/auth/login", json={})
-        assert login_response.status_code == status.HTTP_200_OK
-        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        # Arrange - Create authenticated client using helper
+        authenticated_client, _session_cookies = await create_authenticated_client(async_client)
         
-        # Complete OAuth callback to get authenticated
-        callback_response: Response = await async_client.post(
-            "/auth/callback",
-            json={
-                "code": cast(str, login_data["code"]),
-                "state": cast(str, login_data["state"])
-            }
-        )
-        assert callback_response.status_code == status.HTTP_200_OK
-        
-        # Extract session cookies from callback response
-        session_cookies: dict[str, str] = {}
-        for cookie_header in callback_response.headers.get_list("set-cookie"):
-            if "plex_session_token" in cookie_header:
-                # Parse cookie value
-                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
-                name, value = cookie_parts.split("=", 1)
-                session_cookies[name] = value
-        
-        # Logout with session cookies
-        logout_response: Response = await async_client.post("/auth/logout", cookies=session_cookies)
+        # Logout with authenticated client
+        logout_response: Response = await authenticated_client.post("/auth/logout")
         assert logout_response.status_code == status.HTTP_200_OK
         
         # Extract any updated cookies from logout response (should clear the session)
@@ -887,8 +850,15 @@ class TestSessionManagementEndpoints:
                 name, value = cookie_parts.split("=", 1)
                 logout_cookies[name] = value
         
+        # Create client with cleared cookies
+        logged_out_client = AsyncClient(
+            transport=async_client._transport,
+            base_url=async_client.base_url,
+            cookies=logout_cookies
+        )
+        
         # Act - Check authentication status after logout (use cleared cookies)
-        response: Response = await async_client.get("/auth/me", cookies=logout_cookies)
+        response: Response = await logged_out_client.get("/auth/me")
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
@@ -901,6 +871,10 @@ class TestSessionManagementEndpoints:
         # Verify no user information is returned
         assert "user" in response_data
         assert response_data["user"] is None
+        
+        # Clean up clients
+        await authenticated_client.aclose()
+        await logged_out_client.aclose()
     
     @pytest.mark.asyncio
     async def test_session_endpoints_return_proper_content_type(
