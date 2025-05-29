@@ -488,7 +488,7 @@ The plan is organized into logical phases that build upon each other, ensuring a
       - [ ] Test case: Display loading states with accessible indicators
       - [ ] Test case: Handle authentication errors with user feedback
     - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/components/__tests__/AuthButton.test.tsx`
-    - [ ] **Implementation:** Create responsive authentication button with TailwindCSS
+    - [ ] **Implementation:** Create responsive authentication button with TailwindCSS v4+
     - [ ] **TDD: Verify Tests Pass**
     - [ ] **Refactor:** Review and optimize the implementation
 
