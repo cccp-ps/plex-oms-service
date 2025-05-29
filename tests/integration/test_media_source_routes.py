@@ -339,8 +339,8 @@ class TestIndividualSourceManagementEndpoint:
         # Verify service method was called correctly
         mock_plex_service.toggle_individual_source.assert_called_once()  # pyright: ignore[reportAny]
         args = mock_plex_service.toggle_individual_source.call_args  # pyright: ignore[reportAny]
-        assert args[1]["source_identifier"] == source_id  # pyright: ignore[reportAny]
-        assert args[1]["enable"] is expected_enabled_status  # pyright: ignore[reportAny]
+        assert args[1]["source_identifier"] == source_id
+        assert args[1]["enable"] is expected_enabled_status
 
     @pytest.mark.asyncio
     async def test_patch_media_source_validates_source_exists_and_belongs_to_user(
