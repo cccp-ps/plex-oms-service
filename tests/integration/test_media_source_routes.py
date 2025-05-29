@@ -8,7 +8,7 @@ Tests follow privacy-first principles and include comprehensive error handling,
 authentication validation, and PlexAPI integration testing.
 """
 
-from typing import cast
+from typing import TypedDict, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,6 +19,17 @@ from app.models.plex_models import OnlineMediaSource
 
 # Type alias for JSON values
 JsonValue = str | int | bool | list[str] | None
+
+# Type alias for bulk operation results
+class BulkOperationResult(TypedDict):
+    """Type definition for bulk operation results."""
+    success: bool
+    total_requested: int
+    successful_count: int
+    failed_count: int
+    disabled_sources: list[str]
+    failed_sources: list[str]
+    message: str
 
 class TestMediaSourcesListingEndpoint:
     """Test cases for GET /api/media-sources endpoint."""
@@ -600,7 +611,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: POST /api/media-sources/disable-all performs bulk disable."""
         # Arrange
-        expected_result = {
+        expected_result: BulkOperationResult = {
             "success": True,
             "total_requested": 3,
             "successful_count": 3,
@@ -630,7 +641,7 @@ class TestBulkOperationsEndpoint:
         assert "Successfully disabled 3 media sources" in str(response_data["message"])
         
         # Verify service method was called
-        mock_plex_service.bulk_disable_all_sources.assert_called_once()
+        mock_plex_service.bulk_disable_all_sources.assert_called_once()  # pyright: ignore[reportAny]
 
     @pytest.mark.asyncio
     async def test_bulk_disable_uses_account_opt_out_for_bulk_operations(
@@ -641,7 +652,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Use AccountOptOut.optOut() for bulk operations."""
         # Arrange
-        expected_result = {
+        expected_result: BulkOperationResult = {
             "success": True,
             "total_requested": 2,
             "successful_count": 2,
@@ -662,7 +673,7 @@ class TestBulkOperationsEndpoint:
         # Assert
         assert response.status_code == status.HTTP_200_OK
         # Verify the service was called (service internally uses AccountOptOut.optOut())
-        mock_plex_service.bulk_disable_all_sources.assert_called_once()
+        mock_plex_service.bulk_disable_all_sources.assert_called_once()  # pyright: ignore[reportAny]
 
     @pytest.mark.asyncio
     async def test_bulk_disable_returns_operation_summary_with_counts(
@@ -673,7 +684,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Return operation summary with success/failure counts."""
         # Arrange
-        expected_result = {
+        expected_result: BulkOperationResult = {
             "success": False,
             "total_requested": 5,
             "successful_count": 3,
@@ -711,7 +722,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Handle partial failures appropriately."""
         # Arrange
-        partial_failure_result = {
+        partial_failure_result: BulkOperationResult = {
             "success": False,
             "total_requested": 4,
             "successful_count": 2,
@@ -862,7 +873,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Handle empty sources list gracefully."""
         # Arrange
-        empty_result = {
+        empty_result: BulkOperationResult = {
             "success": True,
             "total_requested": 0,
             "successful_count": 0,
@@ -921,7 +932,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Ensure proper content type header in response."""
         # Arrange
-        expected_result = {
+        expected_result: BulkOperationResult = {
             "success": True,
             "total_requested": 1,
             "successful_count": 1,
@@ -953,7 +964,7 @@ class TestBulkOperationsEndpoint:
     ) -> None:
         """Test case: Log requests securely without exposing sensitive data."""
         # Arrange
-        expected_result = {
+        expected_result: BulkOperationResult = {
             "success": True,
             "total_requested": 2,
             "successful_count": 2,
