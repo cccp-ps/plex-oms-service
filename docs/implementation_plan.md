@@ -319,16 +319,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Session Management Endpoints**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: GET /auth/me returns current user information
-      - [ ] Test case: POST /auth/refresh refreshes authentication token
-      - [ ] Test case: POST /auth/logout clears session and cookies
-      - [ ] Test case: Handle unauthenticated requests appropriately
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
-    - [ ] **Implementation:** Create session management endpoints
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Session Management Endpoints**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: GET /auth/me returns current user information
+      - [x] Test case: POST /auth/refresh refreshes authentication token
+      - [x] Test case: POST /auth/logout clears session and cookies
+      - [x] Test case: Handle unauthenticated requests appropriately
+    - [x] **TDD: Write Failing Tests:** Add to `tests/integration/test_auth_routes.py`
+    - [x] **Implementation:** Create session management endpoints
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 - [ ] **Module: `app/api/routes/media_sources.py`**
   - [ ] **Analyze Requirements:** Define media source management endpoints

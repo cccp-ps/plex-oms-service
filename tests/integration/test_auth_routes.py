@@ -611,4 +611,355 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        assert response.headers["content-type"] == "application/json" 
+        assert response.headers["content-type"] == "application/json"
+
+
+class TestSessionManagementEndpoints:
+    """Test suite for session management endpoints."""
+    
+    @pytest.mark.asyncio
+    async def test_get_current_user_information_when_authenticated(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: GET /auth/me returns current user information when authenticated."""
+        # Arrange - First complete OAuth flow to authenticate
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        
+        # Complete OAuth callback to get authenticated
+        callback_response: Response = await async_client.post(
+            "/auth/callback",
+            json={
+                "code": cast(str, login_data["code"]),
+                "state": cast(str, login_data["state"])
+            }
+        )
+        assert callback_response.status_code == status.HTTP_200_OK
+        
+        # Extract session cookies from callback response
+        session_cookies = {}
+        for cookie_header in callback_response.headers.get_list("set-cookie"):
+            if "plex_session_token" in cookie_header:
+                # Parse cookie value
+                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+                name, value = cookie_parts.split("=", 1)
+                session_cookies[name] = value
+        
+        # Act - Get current user information with session cookies
+        response: Response = await async_client.get("/auth/me", cookies=session_cookies)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify user is authenticated
+        assert "authenticated" in response_data
+        assert response_data["authenticated"] is True
+        
+        # Verify user information is returned
+        assert "user" in response_data
+        assert response_data["user"] is not None
+        user_data = cast(dict[str, object], response_data["user"])
+        
+        # Verify essential user fields
+        required_fields = ["id", "username", "email"]
+        for field in required_fields:
+            assert field in user_data
+            assert user_data[field] is not None
+    
+    @pytest.mark.asyncio
+    async def test_get_current_user_information_when_unauthenticated(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: GET /auth/me returns unauthenticated status when no session."""
+        # Act
+        response: Response = await async_client.get("/auth/me")
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify user is not authenticated
+        assert "authenticated" in response_data
+        assert response_data["authenticated"] is False
+        
+        # Verify no user information is returned
+        assert "user" in response_data
+        assert response_data["user"] is None
+    
+    @pytest.mark.asyncio
+    async def test_refresh_authentication_token_success(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: POST /auth/refresh refreshes authentication token successfully."""
+        # Arrange - First complete OAuth flow to authenticate
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        
+        # Complete OAuth callback to get authenticated
+        callback_response: Response = await async_client.post(
+            "/auth/callback",
+            json={
+                "code": cast(str, login_data["code"]),
+                "state": cast(str, login_data["state"])
+            }
+        )
+        assert callback_response.status_code == status.HTTP_200_OK
+        
+        # Extract session cookies from callback response
+        session_cookies = {}
+        for cookie_header in callback_response.headers.get_list("set-cookie"):
+            if "plex_session_token" in cookie_header:
+                # Parse cookie value
+                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+                name, value = cookie_parts.split("=", 1)
+                session_cookies[name] = value
+        
+        # Act - Refresh token with session cookies
+        response: Response = await async_client.post("/auth/refresh", cookies=session_cookies)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify new token is returned
+        assert "access_token" in response_data
+        assert isinstance(response_data["access_token"], str)
+        assert len(cast(str, response_data["access_token"])) > 0
+        
+        # Verify token type
+        assert "token_type" in response_data
+        assert response_data["token_type"] == "Bearer"
+        
+        # Verify expires_in
+        assert "expires_in" in response_data
+        assert isinstance(response_data["expires_in"], int)
+        assert cast(int, response_data["expires_in"]) > 0
+        
+        # Verify user information is still available
+        assert "user" in response_data
+        assert response_data["user"] is not None
+    
+    @pytest.mark.asyncio
+    async def test_refresh_authentication_token_when_unauthenticated(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: POST /auth/refresh handles unauthenticated requests appropriately."""
+        # Act
+        response: Response = await async_client.post("/auth/refresh")
+        
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = cast(dict[str, str], response.json())
+        
+        assert "detail" in response_data
+        detail_lower = response_data["detail"].lower()
+        assert "authentication" in detail_lower or "unauthorized" in detail_lower
+    
+    @pytest.mark.asyncio
+    async def test_logout_clears_session_and_cookies(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: POST /auth/logout clears session and cookies."""
+        # Arrange - First complete OAuth flow to authenticate
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        
+        # Complete OAuth callback to get authenticated
+        callback_response: Response = await async_client.post(
+            "/auth/callback",
+            json={
+                "code": cast(str, login_data["code"]),
+                "state": cast(str, login_data["state"])
+            }
+        )
+        assert callback_response.status_code == status.HTTP_200_OK
+        
+        # Extract session cookies from callback response
+        session_cookies = {}
+        for cookie_header in callback_response.headers.get_list("set-cookie"):
+            if "plex_session_token" in cookie_header:
+                # Parse cookie value
+                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+                name, value = cookie_parts.split("=", 1)
+                session_cookies[name] = value
+        
+        # Act - Logout with session cookies
+        response: Response = await async_client.post("/auth/logout", cookies=session_cookies)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify logout success
+        assert "success" in response_data
+        assert response_data["success"] is True
+        
+        # Verify logout message
+        assert "message" in response_data
+        assert isinstance(response_data["message"], str)
+        assert len(cast(str, response_data["message"])) > 0
+        
+        # Verify cookies are cleared (should have Set-Cookie headers for clearing)
+        # Look for session clearing cookies in response headers
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        if set_cookie_headers:
+            # At least one cookie should be cleared (have Max-Age=0 or expires in past)
+            cleared_cookies = [
+                cookie for cookie in set_cookie_headers 
+                if "Max-Age=0" in cookie or "expires=" in cookie.lower()
+            ]
+            assert len(cleared_cookies) > 0
+    
+    @pytest.mark.asyncio
+    async def test_logout_when_unauthenticated(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: POST /auth/logout handles unauthenticated requests gracefully."""
+        # Act
+        response: Response = await async_client.post("/auth/logout")
+        
+        # Assert - Logout should succeed even when not authenticated
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify logout success
+        assert "success" in response_data
+        assert response_data["success"] is True
+        
+        # Verify message indicates successful logout
+        assert "message" in response_data
+        assert isinstance(response_data["message"], str)
+    
+    @pytest.mark.asyncio
+    async def test_logout_followed_by_me_returns_unauthenticated(
+        self,
+        async_client: AsyncClient,
+        mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
+    ) -> None:
+        """Test case: After logout, GET /auth/me returns unauthenticated status."""
+        # Arrange - First complete OAuth flow to authenticate
+        login_response: Response = await async_client.post("/auth/login", json={})
+        assert login_response.status_code == status.HTTP_200_OK
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
+        
+        # Complete OAuth callback to get authenticated
+        callback_response: Response = await async_client.post(
+            "/auth/callback",
+            json={
+                "code": cast(str, login_data["code"]),
+                "state": cast(str, login_data["state"])
+            }
+        )
+        assert callback_response.status_code == status.HTTP_200_OK
+        
+        # Extract session cookies from callback response
+        session_cookies = {}
+        for cookie_header in callback_response.headers.get_list("set-cookie"):
+            if "plex_session_token" in cookie_header:
+                # Parse cookie value
+                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+                name, value = cookie_parts.split("=", 1)
+                session_cookies[name] = value
+        
+        # Logout with session cookies
+        logout_response: Response = await async_client.post("/auth/logout", cookies=session_cookies)
+        assert logout_response.status_code == status.HTTP_200_OK
+        
+        # Extract any updated cookies from logout response (should clear the session)
+        logout_cookies = {}
+        for cookie_header in logout_response.headers.get_list("set-cookie"):
+            if "plex_session_token" in cookie_header:
+                # Parse cookie value - should be empty or expired
+                cookie_parts = cookie_header.split(";")[0]  # Get just the name=value part
+                name, value = cookie_parts.split("=", 1)
+                logout_cookies[name] = value
+        
+        # Act - Check authentication status after logout (use cleared cookies)
+        response: Response = await async_client.get("/auth/me", cookies=logout_cookies)
+        
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, object], response.json())
+        
+        # Verify user is not authenticated after logout
+        assert "authenticated" in response_data
+        assert response_data["authenticated"] is False
+        
+        # Verify no user information is returned
+        assert "user" in response_data
+        assert response_data["user"] is None
+    
+    @pytest.mark.asyncio
+    async def test_session_endpoints_return_proper_content_type(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: Session endpoints return proper JSON content type."""
+        # Test /auth/me
+        me_response: Response = await async_client.get("/auth/me")
+        assert me_response.status_code == status.HTTP_200_OK
+        assert me_response.headers["content-type"] == "application/json"
+        
+        # Test /auth/logout
+        logout_response: Response = await async_client.post("/auth/logout")
+        assert logout_response.status_code == status.HTTP_200_OK
+        assert logout_response.headers["content-type"] == "application/json"
+        
+        # Test /auth/refresh (will return 401 for unauthenticated, but should still be JSON)
+        refresh_response: Response = await async_client.post("/auth/refresh")
+        assert refresh_response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert refresh_response.headers["content-type"] == "application/json"
+    
+    @pytest.mark.asyncio
+    async def test_handle_unauthenticated_requests_consistently(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: Handle unauthenticated requests appropriately across all endpoints."""
+        # Test protected endpoints that require authentication
+        protected_endpoints = [
+            ("POST", "/auth/refresh")
+        ]
+        
+        for method, endpoint in protected_endpoints:
+            if method == "POST":
+                response: Response = await async_client.post(endpoint)
+            elif method == "GET":
+                response = await async_client.get(endpoint)
+            else:
+                continue  # Skip unsupported methods
+            
+            # All protected endpoints should return 401 for unauthenticated requests
+            assert response.status_code == status.HTTP_401_UNAUTHORIZED
+            response_data = cast(dict[str, str], response.json())
+            assert "detail" in response_data
+        
+        # Test endpoints that work without authentication
+        public_endpoints = [
+            ("GET", "/auth/me"),        # Returns unauthenticated status
+            ("POST", "/auth/logout")    # Succeeds even when not authenticated
+        ]
+        
+        for method, endpoint in public_endpoints:
+            if method == "POST":
+                response = await async_client.post(endpoint)
+            elif method == "GET":
+                response = await async_client.get(endpoint)
+            else:
+                continue  # Skip unsupported methods
+            
+            # Public endpoints should return 200 even for unauthenticated requests
+            assert response.status_code == status.HTTP_200_OK 

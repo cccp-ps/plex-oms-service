@@ -9,7 +9,7 @@ Provides endpoints for Plex OAuth authentication including:
 Following security best practices with proper error handling and rate limiting.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 
 from app.config import Settings, get_settings
@@ -27,6 +27,40 @@ from app.services.auth_service import PlexAuthService
 
 # Create router for authentication endpoints
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+# Session cookie settings
+SESSION_COOKIE_NAME = "plex_session_token"
+SESSION_COOKIE_MAX_AGE = 3600  # 1 hour
+
+
+def get_token_from_request(request: Request) -> str | None:
+    """Extract authentication token from request cookies."""
+    return request.cookies.get(SESSION_COOKIE_NAME)
+
+
+def set_session_cookie(response: Response, token: str) -> None:
+    """Set secure HTTP-only session cookie."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=SESSION_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=True,  # Ensure HTTPS in production
+        samesite="lax"
+    )
+
+
+def clear_session_cookie(response: Response) -> None:
+    """Clear session cookie by setting it to expire."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value="",
+        max_age=0,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        expires="Thu, 01 Jan 1970 00:00:00 GMT"
+    )
 
 
 @router.post(
@@ -106,6 +140,7 @@ async def initiate_oauth_flow(
 )
 async def complete_oauth_flow(
     request: OAuthCallbackRequest,
+    response: Response,
     settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
 ) -> OAuthCallbackResponse:
     """
@@ -113,9 +148,11 @@ async def complete_oauth_flow(
     
     Validates the state parameter for CSRF protection, waits for OAuth completion,
     and retrieves the authenticated MyPlexAccount with user information.
+    Sets secure HTTP-only session cookie for session management.
     
     Args:
         request: OAuth callback request with code and state
+        response: HTTP response object for setting cookies
         settings: Application settings dependency
         
     Returns:
@@ -159,6 +196,9 @@ async def complete_oauth_flow(
         
         # Provide default expires_in if None (e.g., 1 hour)
         expires_in_seconds = expires_in if expires_in is not None else 3600
+        
+        # Set secure session cookie
+        set_session_cookie(response, access_token)
         
         # Return structured response with proper type annotations
         return OAuthCallbackResponse(
@@ -205,26 +245,52 @@ async def complete_oauth_flow(
     description="Get current user authentication status and information"
 )
 async def get_authentication_status(
-    _settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
+    request: Request,
+    settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
 ) -> AuthStatusResponse:
     """
     Get current user authentication status.
     
-    This endpoint will be enhanced with session management when sessions are implemented.
-    For now, it returns a basic structure for testing purposes.
+    Validates the session token from HTTP-only cookie and returns user information
+    if authenticated, or unauthenticated status if no valid session exists.
     
     Args:
-        _settings: Application settings dependency (unused for now)
+        request: HTTP request object for extracting session cookie
+        settings: Application settings dependency
         
     Returns:
-        Authentication status response
+        Authentication status response with user info if authenticated
     """
-    # TODO: Implement actual session validation when session middleware is added
-    # For now, return not authenticated for testing
-    return AuthStatusResponse(
-        authenticated=False,
-        user=None
-    )
+    # Get token from session cookie
+    token = get_token_from_request(request)
+    
+    if not token:
+        return AuthStatusResponse(
+            authenticated=False,
+            user=None
+        )
+    
+    # Validate token using auth service
+    auth_service = PlexAuthService(settings)
+    validation_result = auth_service.validate_token(token)
+    
+    if validation_result.get("valid", False):
+        # Return authenticated status with user info
+        user_data = validation_result.get("user")
+        # Ensure user_data is properly typed
+        if user_data is not None and not isinstance(user_data, dict):
+            user_data = None  # Fallback if user data is not a dict
+        
+        return AuthStatusResponse(
+            authenticated=True,
+            user=user_data  # pyright: ignore[reportGeneralTypeIssues]
+        )
+    else:
+        # Token is invalid, return unauthenticated
+        return AuthStatusResponse(
+            authenticated=False,
+            user=None
+        )
 
 
 @router.post(
@@ -235,22 +301,25 @@ async def get_authentication_status(
     description="Clear user session and logout"
 )
 async def logout_user(
+    response: Response,
     _settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
 ) -> LogoutResponse:
     """
     Logout user and clear session.
     
-    This endpoint will be enhanced with session management when sessions are implemented.
-    For now, it returns a basic structure for testing purposes.
+    Clears the session cookie and invalidates the user session. This endpoint
+    succeeds even if the user is not currently authenticated.
     
     Args:
-        _settings: Application settings dependency (unused for now)
+        response: HTTP response object for clearing cookies
+        _settings: Application settings dependency (unused)
         
     Returns:
         Logout confirmation response
     """
-    # TODO: Implement actual session clearing when session middleware is added
-    # For now, return success for testing
+    # Clear session cookie
+    clear_session_cookie(response)
+    
     return LogoutResponse(
         success=True,
         message="Successfully logged out"
@@ -265,25 +334,115 @@ async def logout_user(
     description="Refresh expired authentication token"
 )
 async def refresh_authentication_token(
-    _settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
+    request: Request,
+    response: Response,
+    settings: Settings = Depends(get_settings)  # pyright: ignore[reportCallInDefaultInitializer]
 ) -> OAuthCallbackResponse:
     """
     Refresh authentication token.
     
-    This endpoint will be enhanced with token refresh logic when session management
-    is implemented. For now, it raises an error indicating not implemented.
+    Validates the current session token and refreshes it if valid. Updates the
+    session cookie with the new token and returns updated user information.
     
     Args:
-        _settings: Application settings dependency (unused for now)
+        request: HTTP request object for extracting current session
+        response: HTTP response object for updating session cookie
+        settings: Application settings dependency
         
     Returns:
-        Refreshed token response
+        Refreshed token response with new access token and user info
         
     Raises:
-        HTTPException 501: Not implemented yet
+        HTTPException 401: When no valid session exists or token cannot be refreshed
+        HTTPException 503: When PlexAPI connection fails
+        HTTPException 500: For unexpected server errors
     """
-    # TODO: Implement token refresh when session management is added
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Token refresh not implemented yet"
-    ) 
+    # Get current token from session cookie
+    current_token = get_token_from_request(request)
+    
+    if not current_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No authentication session found"
+        )
+    
+    try:
+        # Initialize PlexAuthService
+        auth_service = PlexAuthService(settings)
+        
+        # Attempt to refresh the token
+        refresh_result = auth_service.refresh_token(current_token)
+        
+        if not refresh_result.get("success", False):
+            # Clear invalid session cookie
+            clear_session_cookie(response)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Token refresh failed: {refresh_result.get('error', 'Unknown error')}"
+            )
+        
+        # Extract refreshed data
+        new_access_token = refresh_result.get("access_token")
+        user_data = refresh_result.get("user")
+        expires_in_raw = refresh_result.get("expires_in", 3600)
+        
+        # Validate extracted data
+        if not isinstance(new_access_token, str):
+            raise ValueError("New access token must be a string")
+        
+        if not isinstance(user_data, dict):
+            raise ValueError("User data must be a dictionary")
+        
+        # Ensure expires_in is properly typed
+        if isinstance(expires_in_raw, int):
+            expires_in = expires_in_raw
+        else:
+            expires_in = 3600  # Default fallback
+        
+        # Create PlexUser instance from refreshed user data
+        try:
+            plex_user = PlexUser(**user_data)  # pyright: ignore[reportUnknownArgumentType]
+        except Exception as e:
+            raise ValueError(f"Invalid user data structure: {str(e)}") from e
+        
+        # Update session cookie with new token
+        set_session_cookie(response, new_access_token)
+        
+        # Return refreshed token response
+        return OAuthCallbackResponse(
+            access_token=new_access_token,
+            token_type="Bearer",
+            user=plex_user,
+            expires_in=expires_in
+        )
+        
+    except Unauthorized as e:
+        # Handle authentication failures
+        clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Authentication failed during token refresh: {str(e)}"
+        ) from e
+        
+    except BadRequest as e:
+        # Handle PlexAPI connection errors
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Unable to connect to Plex servers: {str(e)}"
+        ) from e
+        
+    except (ValueError, TypeError) as e:
+        # Handle data validation errors
+        clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Invalid response data from authentication service: {str(e)}"
+        ) from e
+        
+    except Exception as e:
+        # Handle unexpected errors
+        clear_session_cookie(response)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during token refresh"
+        ) from e 
