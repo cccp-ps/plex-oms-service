@@ -20,6 +20,13 @@ from httpx import AsyncClient, Response
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 
 
+# Type aliases for better type safety
+OAuthInitiationResponseData = dict[str, object]
+OAuthCallbackResponseData = dict[str, object]
+UserData = dict[str, object]
+ErrorResponseData = dict[str, str]
+
+
 class TestOAuthInitiationEndpoint:
     """Test suite for POST /auth/login OAuth initiation endpoint."""
     
@@ -38,7 +45,7 @@ class TestOAuthInitiationEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(OAuthInitiationResponseData, response.json())
         
         # Verify OAuth URL is returned for direct Plex account login
         assert "oauth_url" in response_data
@@ -73,7 +80,7 @@ class TestOAuthInitiationEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(OAuthInitiationResponseData, response.json())
         
         # Verify required fields are present
         assert "oauth_url" in response_data
@@ -99,8 +106,8 @@ class TestOAuthInitiationEndpoint:
         assert response1.status_code == status.HTTP_200_OK
         assert response2.status_code == status.HTTP_200_OK
         
-        state1 = cast(str, response1.json()["state"])
-        state2 = cast(str, response2.json()["state"])
+        state1 = cast(str, cast(OAuthInitiationResponseData, response1.json())["state"])
+        state2 = cast(str, cast(OAuthInitiationResponseData, response2.json())["state"])
         
         # Verify states are different (unique generation)
         assert state1 != state2
@@ -137,11 +144,11 @@ class TestOAuthInitiationEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
         assert "Plex" in response_data["detail"]
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "connect" in detail_lower
     
     @pytest.mark.asyncio
@@ -167,10 +174,10 @@ class TestOAuthInitiationEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "authentication" in detail_lower
     
     @pytest.mark.asyncio
@@ -200,7 +207,7 @@ class TestOAuthInitiationEndpoint:
         async_client: AsyncClient,
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
-        """Test case: Endpoint returns proper JSON content type."""
+        """Test case: Return proper content type header."""
         # Act
         response: Response = await async_client.post("/auth/login", json={})
         
@@ -214,17 +221,18 @@ class TestOAuthInitiationEndpoint:
         async_client: AsyncClient,
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
-        """Test case: Endpoint includes proper security headers."""
+        """Test case: Include security headers in OAuth initiation response."""
         # Act
         response: Response = await async_client.post("/auth/login", json={})
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
         
-        # Check for security headers (will be added by security middleware)
-        # These tests verify integration with security middleware
-        headers = response.headers
-        assert "x-content-type-options" in headers or response.status_code == status.HTTP_200_OK
+        # For now, we verify content type (security headers would be added by middleware)
+        assert response.headers["content-type"] == "application/json"
+        
+        # TODO: Add proper security header validation when security middleware is implemented
+        # Expected headers: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection
     
     @pytest.mark.asyncio
     @pytest.mark.skip(reason="Rate limiting integration test - requires rate limiting middleware")
@@ -233,19 +241,21 @@ class TestOAuthInitiationEndpoint:
         async_client: AsyncClient,
         mock_oauth_flow_success: dict[str, object]  # pyright: ignore[reportUnusedParameter]
     ) -> None:
-        """Test case: Apply rate limiting to prevent abuse."""
-        # This test will be implemented when rate limiting middleware is integrated
-        # For now, we skip it as it requires the actual rate limiting configuration
+        """Test case: Apply rate limiting to OAuth initiation endpoint."""
+        # This test would verify rate limiting middleware is working
+        # Skipped until rate limiting middleware is implemented
         
-        # Make multiple rapid requests
+        # Expected behavior: Make many requests and verify rate limiting kicks in
+        # after a certain threshold (e.g., 10 requests per minute)
+        
         responses: list[Response] = []
-        for _ in range(10):  # Attempt 10 requests quickly
+        for _ in range(15):  # Attempt more than rate limit
             response: Response = await async_client.post("/auth/login", json={})
             responses.append(response)
         
-        # Should eventually hit rate limit
-        status_codes: list[int] = [r.status_code for r in responses]
-        assert status.HTTP_429_TOO_MANY_REQUESTS in status_codes
+        # Should have some 429 Too Many Requests responses
+        rate_limited_responses: list[Response] = [r for r in responses if r.status_code == 429]
+        assert len(rate_limited_responses) > 0
 
 
 class TestOAuthCallbackEndpoint:
@@ -261,7 +271,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         state = cast(str, login_data["state"])
         code = cast(str, login_data["code"])
@@ -276,7 +286,7 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(OAuthCallbackResponseData, response.json())
         
         # Verify response contains all required fields
         assert "access_token" in response_data
@@ -285,14 +295,15 @@ class TestOAuthCallbackEndpoint:
         assert "expires_in" in response_data
         
         # Verify token fields
-        assert isinstance(response_data["access_token"], str)
-        assert len(response_data["access_token"]) > 0
+        access_token = cast(str, response_data["access_token"])
+        assert isinstance(access_token, str)
+        assert len(access_token) > 0
         assert response_data["token_type"] == "Bearer"
         assert isinstance(response_data["expires_in"], int)
         assert response_data["expires_in"] > 0
         
         # Verify user information
-        user_data = response_data["user"]
+        user_data = cast(UserData, response_data["user"])
         assert isinstance(user_data, dict)
         assert "id" in user_data
         assert "username" in user_data
@@ -309,7 +320,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         valid_state = cast(str, login_data["state"])
         valid_code = cast(str, login_data["code"])
@@ -336,7 +347,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         state = cast(str, login_data["state"])
         code = cast(str, login_data["code"])
@@ -354,15 +365,16 @@ class TestOAuthCallbackEndpoint:
         
         # For now, we verify the response structure
         # TODO: Add cookie validation when session management with HTTPOnly cookies is implemented
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(OAuthCallbackResponseData, response.json())
         assert "access_token" in response_data
         assert "user" in response_data
         
         # Verify security considerations are addressed in response
         # The access_token should be present for client-side storage initially
         # Session cookies will be implemented as part of session management feature
-        assert isinstance(response_data["access_token"], str)
-        assert len(response_data["access_token"]) > 0
+        access_token = cast(str, response_data["access_token"])
+        assert isinstance(access_token, str)
+        assert len(access_token) > 0
     
     @pytest.mark.asyncio
     async def test_oauth_callback_returns_user_information_and_success_status(
@@ -374,7 +386,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         state = cast(str, login_data["state"])
         code = cast(str, login_data["code"])
@@ -389,10 +401,10 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(OAuthCallbackResponseData, response.json())
         
         # Verify user information structure
-        user_data = response_data["user"]
+        user_data = cast(UserData, response_data["user"])
         assert isinstance(user_data, dict)
         
         # Verify required user fields
@@ -421,7 +433,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         valid_state = cast(str, login_data["state"])
         
@@ -436,10 +448,10 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "oauth" in detail_lower or "authentication" in detail_lower
     
     @pytest.mark.asyncio
@@ -452,7 +464,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid code
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         valid_code = cast(str, login_data["code"])
         
@@ -467,10 +479,10 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "state" in detail_lower or "authentication" in detail_lower or "oauth" in detail_lower
     
     @pytest.mark.asyncio
@@ -501,10 +513,10 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "oauth" in detail_lower or "expired" in detail_lower or "authentication" in detail_lower
     
     @pytest.mark.asyncio
@@ -546,7 +558,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         valid_state = cast(str, login_data["state"])
         valid_code = cast(str, login_data["code"])
@@ -568,10 +580,10 @@ class TestOAuthCallbackEndpoint:
         
         # Assert
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        response_data = response.json()  # pyright: ignore[reportAny]
+        response_data = cast(ErrorResponseData, response.json())
         
         assert "detail" in response_data
-        detail_lower = cast(str, response_data["detail"]).lower()
+        detail_lower = response_data["detail"].lower()
         assert "plex" in detail_lower and "connect" in detail_lower
     
     @pytest.mark.asyncio
@@ -584,7 +596,7 @@ class TestOAuthCallbackEndpoint:
         # Arrange - First initiate OAuth to get valid state
         login_response: Response = await async_client.post("/auth/login", json={})
         assert login_response.status_code == status.HTTP_200_OK
-        login_data = login_response.json()  # pyright: ignore[reportAny]
+        login_data = cast(OAuthInitiationResponseData, login_response.json())
         
         state = cast(str, login_data["state"])
         code = cast(str, login_data["code"])
