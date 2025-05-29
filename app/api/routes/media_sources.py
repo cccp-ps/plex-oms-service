@@ -20,8 +20,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.models.plex_models import OnlineMediaSource
+from app.schemas.media_source_schemas import IndividualSourceToggleRequest
 from app.services.plex_service import PlexMediaSourceService
-from app.utils.exceptions import AuthenticationException, PlexAPIException
+from app.utils.exceptions import AuthenticationException, PlexAPIException, ValidationException
 
 # Configure secure logging
 logger = logging.getLogger(__name__)
@@ -158,6 +159,169 @@ async def get_media_sources(
     except Exception as e:
         # Handle unexpected errors
         logger.error("Unexpected error during media sources request")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again later."
+        ) from e 
+
+@router.patch(
+    "/{source_id}",
+    response_model=OnlineMediaSource,
+    status_code=status.HTTP_200_OK,
+    summary="Toggle individual media source",
+    description="Enable or disable a specific online media source with proper validation and authorization",
+    responses={
+        200: {
+            "description": "Successfully toggled media source",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "identifier": "spotify",
+                        "title": "Spotify",
+                        "enabled": True,
+                        "scrobble_types": ["track"]
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Authentication credentials required"}
+                }
+            }
+        },
+        404: {
+            "description": "Media source not found",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Media source not found or doesn't belong to user"}
+                }
+            }
+        },
+        422: {
+            "description": "Invalid request payload",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Request payload validation failed"}
+                }
+            }
+        },
+        500: {
+            "description": "Toggle operation failed",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Failed to toggle media source"}
+                }
+            }
+        },
+        503: {
+            "description": "Plex API service unavailable",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Plex API service temporarily unavailable"}
+                }
+            }
+        }
+    }
+)
+async def toggle_individual_media_source(
+    source_id: str,
+    request: Request,  # pyright: ignore[reportUnusedParameter]
+    toggle_request: "IndividualSourceToggleRequest",
+    token: Annotated[str, Depends(get_current_user_token)]
+) -> OnlineMediaSource:
+    """
+    Toggle an individual media source on/off.
+    
+    Enables or disables a specific online media source for the authenticated user.
+    Validates that the source exists and belongs to the user before performing
+    the toggle operation. Returns the updated source information on success.
+    
+    Args:
+        source_id: Identifier for the media source to toggle
+        request: FastAPI request object (for logging context)
+        toggle_request: Request payload containing enabled status
+        token: User's authentication token from Authorization header
+        
+    Returns:
+        Updated OnlineMediaSource object with new enabled status
+        
+    Raises:
+        HTTPException: When validation fails, source not found, or operations fail
+    """
+    try:
+        # Validate source_id parameter
+        if not source_id or not source_id.strip():
+            logger.warning("Invalid source_id parameter provided")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Source ID cannot be empty"
+            )
+        
+        # Log request without sensitive data
+        logger.info(f"Individual source toggle request for source: {source_id[:10]}...")
+        
+        # Perform toggle operation using the service
+        toggle_success = plex_service.toggle_individual_source(
+            authentication_token=token,
+            source_identifier=source_id.strip(),
+            enable=toggle_request.enabled
+        )
+        
+        # Check if toggle operation was successful
+        if not toggle_success:
+            logger.error(f"Toggle operation failed for source: {source_id[:10]}...")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to toggle media source operation. Please try again later."
+            )
+        
+        # Get updated source status
+        updated_source = plex_service.get_individual_source_status(
+            authentication_token=token,
+            source_identifier=source_id.strip()
+        )
+        
+        # Log successful response without exposing data
+        action = "enabled" if toggle_request.enabled else "disabled"
+        logger.info(f"Successfully {action} media source: {source_id[:10]}...")
+        
+        return updated_source
+        
+    except HTTPException:
+        # Re-raise HTTPExceptions (including the toggle failure case)
+        raise
+        
+    except AuthenticationException as e:
+        # Handle authentication errors
+        logger.warning(f"Authentication failed for source toggle: {source_id[:10]}...")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+            headers={"WWW-Authenticate": "Bearer"}
+        ) from e
+        
+    except ValidationException as e:
+        # Handle validation errors (source not found)
+        logger.warning(f"Source not found for toggle: {source_id[:10]}...")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media source not found or doesn't belong to user"
+        ) from e
+        
+    except PlexAPIException as e:
+        # Handle Plex API connection errors
+        logger.error(f"Plex API error during source toggle: {source_id[:10]}...")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Plex API service temporarily unavailable. Please try again later."
+        ) from e
+        
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error(f"Unexpected error during source toggle: {source_id[:10]}...")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again later."

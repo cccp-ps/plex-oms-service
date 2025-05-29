@@ -344,17 +344,17 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Individual Source Management Endpoint**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: PATCH /api/media-sources/{source_id} toggles individual source
-      - [ ] Test case: Validate source exists and belongs to user
-      - [ ] Test case: Return updated source status
-      - [ ] Test case: Handle PlexAPI operation errors
-      - [ ] Test case: Apply proper authorization checks
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
-    - [ ] **Implementation:** Create individual source management endpoint
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Individual Source Management Endpoint**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: PATCH /api/media-sources/{source_id} toggles individual source
+      - [x] Test case: Validate source exists and belongs to user
+      - [x] Test case: Return updated source status
+      - [x] Test case: Handle PlexAPI operation errors
+      - [x] Test case: Apply proper authorization checks
+    - [x] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
+    - [x] **Implementation:** Create individual source management endpoint
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Bulk Operations Endpoint**
     - [ ] **TDD: Define Test Cases:**

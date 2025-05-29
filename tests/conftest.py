@@ -389,6 +389,9 @@ def mock_plex_service(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     # Mock the toggle_individual_source method
     mock_service.toggle_individual_source = MagicMock(return_value=True)
     
+    # Mock the get_individual_source_status method
+    mock_service.get_individual_source_status = MagicMock(return_value=None)
+    
     # Mock the bulk_disable_all_sources method
     mock_service.bulk_disable_all_sources = MagicMock(return_value={
         "success": True,
