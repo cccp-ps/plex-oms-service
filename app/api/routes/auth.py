@@ -9,6 +9,7 @@ Provides endpoints for Plex OAuth authentication including:
 Following security best practices with proper error handling and rate limiting.
 """
 
+from typing import cast
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 
@@ -277,13 +278,16 @@ async def get_authentication_status(
     if validation_result.get("valid", False):
         # Return authenticated status with user info
         user_data = validation_result.get("user")
-        # Ensure user_data is properly typed
-        if user_data is not None and not isinstance(user_data, dict):
-            user_data = None  # Fallback if user data is not a dict
+        # Safely cast user_data to the expected type for AuthStatusResponse
+        if user_data is not None and isinstance(user_data, dict):
+            # Cast to proper type since we know from auth service it returns dict[str, object]
+            typed_user_data = cast(dict[str, object], user_data)
+        else:
+            typed_user_data = None
         
         return AuthStatusResponse(
             authenticated=True,
-            user=user_data  # pyright: ignore[reportGeneralTypeIssues]
+            user=typed_user_data
         )
     else:
         # Token is invalid, return unauthenticated

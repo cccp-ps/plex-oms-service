@@ -640,7 +640,7 @@ class TestSessionManagementEndpoints:
         assert callback_response.status_code == status.HTTP_200_OK
         
         # Extract session cookies from callback response
-        session_cookies = {}
+        session_cookies: dict[str, str] = {}
         for cookie_header in callback_response.headers.get_list("set-cookie"):
             if "plex_session_token" in cookie_header:
                 # Parse cookie value
@@ -714,7 +714,7 @@ class TestSessionManagementEndpoints:
         assert callback_response.status_code == status.HTTP_200_OK
         
         # Extract session cookies from callback response
-        session_cookies = {}
+        session_cookies: dict[str, str] = {}
         for cookie_header in callback_response.headers.get_list("set-cookie"):
             if "plex_session_token" in cookie_header:
                 # Parse cookie value
@@ -732,7 +732,7 @@ class TestSessionManagementEndpoints:
         # Verify new token is returned
         assert "access_token" in response_data
         assert isinstance(response_data["access_token"], str)
-        assert len(cast(str, response_data["access_token"])) > 0
+        assert len(response_data["access_token"]) > 0
         
         # Verify token type
         assert "token_type" in response_data
@@ -741,7 +741,7 @@ class TestSessionManagementEndpoints:
         # Verify expires_in
         assert "expires_in" in response_data
         assert isinstance(response_data["expires_in"], int)
-        assert cast(int, response_data["expires_in"]) > 0
+        assert response_data["expires_in"] > 0
         
         # Verify user information is still available
         assert "user" in response_data
@@ -787,7 +787,7 @@ class TestSessionManagementEndpoints:
         assert callback_response.status_code == status.HTTP_200_OK
         
         # Extract session cookies from callback response
-        session_cookies = {}
+        session_cookies: dict[str, str] = {}
         for cookie_header in callback_response.headers.get_list("set-cookie"):
             if "plex_session_token" in cookie_header:
                 # Parse cookie value
@@ -809,7 +809,7 @@ class TestSessionManagementEndpoints:
         # Verify logout message
         assert "message" in response_data
         assert isinstance(response_data["message"], str)
-        assert len(cast(str, response_data["message"])) > 0
+        assert len(response_data["message"]) > 0
         
         # Verify cookies are cleared (should have Set-Cookie headers for clearing)
         # Look for session clearing cookies in response headers
@@ -866,7 +866,7 @@ class TestSessionManagementEndpoints:
         assert callback_response.status_code == status.HTTP_200_OK
         
         # Extract session cookies from callback response
-        session_cookies = {}
+        session_cookies: dict[str, str] = {}
         for cookie_header in callback_response.headers.get_list("set-cookie"):
             if "plex_session_token" in cookie_header:
                 # Parse cookie value
@@ -879,7 +879,7 @@ class TestSessionManagementEndpoints:
         assert logout_response.status_code == status.HTTP_200_OK
         
         # Extract any updated cookies from logout response (should clear the session)
-        logout_cookies = {}
+        logout_cookies: dict[str, str] = {}
         for cookie_header in logout_response.headers.get_list("set-cookie"):
             if "plex_session_token" in cookie_header:
                 # Parse cookie value - should be empty or expired
