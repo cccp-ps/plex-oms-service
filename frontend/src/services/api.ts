@@ -422,6 +422,23 @@ class ApiClient {
     return response
   }
 
+  /**
+   * Refresh authentication token
+   */
+  async refreshToken(): Promise<ApiClientResponse<OAuthCallbackResponse>> {
+    const response = await this.httpClient.request<OAuthCallbackResponse>('/auth/refresh', {
+      method: 'POST',
+      requiresAuth: true,
+    })
+
+    // Save the new authentication token
+    if (response.data?.access_token) {
+      saveAuthToken(response.data.access_token)
+    }
+
+    return response
+  }
+
   // Media Sources Methods
   // ====================
 
@@ -467,6 +484,7 @@ class ApiClient {
 // Create and export default instance
 const apiClient = new ApiClient()
 
+export { apiClient }
 export default apiClient
 export { ApiClient, HttpClient }
 export type { ApiClientResponse } 
