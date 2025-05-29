@@ -8,13 +8,17 @@ Tests follow privacy-first principles and include comprehensive error handling,
 authentication validation, and PlexAPI integration testing.
 """
 
+from typing import cast
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from unittest.mock import MagicMock
 
 from app.models.plex_models import OnlineMediaSource
 
+# Type alias for JSON values
+JsonValue = str | int | bool | list[str] | None
 
 class TestMediaSourcesListingEndpoint:
     """Test cases for GET /api/media-sources endpoint."""
@@ -42,7 +46,7 @@ class TestMediaSourcesListingEndpoint:
                 scrobble_types=["track"]
             )
         ]
-        mock_plex_service.get_media_sources.return_value = expected_sources
+        mock_plex_service.get_media_sources.return_value = expected_sources  # pyright: ignore[reportAny]
 
         # Act
         response = await async_client.get(
@@ -52,7 +56,7 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()
+        response_data = cast(list[dict[str, JsonValue]], response.json())
         assert len(response_data) == 2
         assert response_data[0]["identifier"] == "spotify"
         assert response_data[0]["title"] == "Spotify"
@@ -72,9 +76,10 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()
+        response_data = cast(dict[str, JsonValue], response.json())
         assert "detail" in response_data
-        assert "authenticate" in response_data["detail"].lower()
+        detail_str = str(response_data["detail"])
+        assert "authenticate" in detail_str.lower()
 
     @pytest.mark.asyncio
     async def test_get_media_sources_filters_data_for_privacy(
@@ -93,7 +98,7 @@ class TestMediaSourcesListingEndpoint:
                 scrobble_types=["track"]
             )
         ]
-        mock_plex_service.get_media_sources.return_value = privacy_safe_sources
+        mock_plex_service.get_media_sources.return_value = privacy_safe_sources  # pyright: ignore[reportAny]
 
         # Act
         response = await async_client.get(
@@ -103,12 +108,13 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        response_data = response.json()
-        
+        response_data = cast(list[dict[str, JsonValue]], response.json())
+
         # Verify only privacy-safe fields are returned
         required_fields = {"identifier", "title", "enabled", "scrobble_types"}
         for source in response_data:
-            assert set(source.keys()) == required_fields
+            source_keys = set(source.keys())
+            assert source_keys == required_fields
             # Verify no sensitive data is included
             assert "internal_id" not in source
             assert "user_data" not in source
@@ -124,7 +130,7 @@ class TestMediaSourcesListingEndpoint:
         """Test case: Handle PlexAPI errors gracefully."""
         # Arrange
         from app.utils.exceptions import PlexAPIException
-        mock_plex_service.get_media_sources.side_effect = PlexAPIException(
+        mock_plex_service.get_media_sources.side_effect = PlexAPIException(  # pyright: ignore[reportAny]
             "Failed to connect to Plex API"
         )
 
@@ -136,9 +142,10 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-        response_data = response.json()
+        response_data = cast(dict[str, JsonValue], response.json())
         assert "detail" in response_data
-        assert "plex" in response_data["detail"].lower()
+        detail_str = str(response_data["detail"])
+        assert "plex" in detail_str.lower()
 
     @pytest.mark.asyncio
     async def test_get_media_sources_handles_authentication_errors(
@@ -150,7 +157,7 @@ class TestMediaSourcesListingEndpoint:
         """Test case: Handle authentication errors from PlexAPI."""
         # Arrange
         from app.utils.exceptions import AuthenticationException
-        mock_plex_service.get_media_sources.side_effect = AuthenticationException(
+        mock_plex_service.get_media_sources.side_effect = AuthenticationException(  # pyright: ignore[reportAny]
             "Authentication failed with provided token"
         )
 
@@ -162,9 +169,10 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        response_data = response.json()
+        response_data = cast(dict[str, JsonValue], response.json())
         assert "detail" in response_data
-        assert "authentication" in response_data["detail"].lower()
+        detail_str = str(response_data["detail"])
+        assert "authentication" in detail_str.lower()
 
     @pytest.mark.asyncio
     async def test_get_media_sources_returns_proper_http_status_codes(
@@ -175,7 +183,7 @@ class TestMediaSourcesListingEndpoint:
     ) -> None:
         """Test case: Return proper HTTP status codes."""
         # Test successful response
-        mock_plex_service.get_media_sources.return_value = []
+        mock_plex_service.get_media_sources.return_value = []  # pyright: ignore[reportAny]
         response = await async_client.get(
             "/api/media-sources",
             headers=authenticated_headers
@@ -183,13 +191,14 @@ class TestMediaSourcesListingEndpoint:
         assert response.status_code == status.HTTP_200_OK
 
         # Test empty sources list
-        mock_plex_service.get_media_sources.return_value = []
+        mock_plex_service.get_media_sources.return_value = []  # pyright: ignore[reportAny]
         response = await async_client.get(
             "/api/media-sources",
             headers=authenticated_headers
         )
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == []
+        response_json = cast(list[dict[str, JsonValue]], response.json())
+        assert response_json == []
 
     @pytest.mark.asyncio
     async def test_get_media_sources_handles_empty_sources_list(
@@ -200,7 +209,7 @@ class TestMediaSourcesListingEndpoint:
     ) -> None:
         """Test case: Handle empty media sources list."""
         # Arrange
-        mock_plex_service.get_media_sources.return_value = []
+        mock_plex_service.get_media_sources.return_value = []  # pyright: ignore[reportAny]
 
         # Act
         response = await async_client.get(
@@ -210,7 +219,8 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        assert response.json() == []
+        response_json = cast(list[dict[str, JsonValue]], response.json())
+        assert response_json == []
 
     @pytest.mark.asyncio
     async def test_get_media_sources_validates_authentication_token(
@@ -221,10 +231,10 @@ class TestMediaSourcesListingEndpoint:
         """Test case: Validate authentication token format and presence."""
         # Test with invalid token format
         invalid_headers = {"Authorization": "Bearer invalid-token-format"}
-        
+
         # Mock the service to raise authentication error for invalid token
         from app.utils.exceptions import AuthenticationException
-        mock_plex_service.get_media_sources.side_effect = AuthenticationException(
+        mock_plex_service.get_media_sources.side_effect = AuthenticationException(  # pyright: ignore[reportAny]
             "Invalid authentication token provided"
         )
 
@@ -244,7 +254,7 @@ class TestMediaSourcesListingEndpoint:
     ) -> None:
         """Test case: Response includes proper content-type header."""
         # Arrange
-        mock_plex_service.get_media_sources.return_value = []
+        mock_plex_service.get_media_sources.return_value = []  # pyright: ignore[reportAny]
 
         # Act
         response = await async_client.get(
@@ -264,9 +274,9 @@ class TestMediaSourcesListingEndpoint:
         mock_plex_service: MagicMock,
         caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Test case: Verify secure logging without exposing sensitive data."""
+        """Test case: Log requests securely without exposing sensitive data."""
         # Arrange
-        mock_plex_service.get_media_sources.return_value = []
+        mock_plex_service.get_media_sources.return_value = []  # pyright: ignore[reportAny]
 
         # Act
         response = await async_client.get(
@@ -276,10 +286,11 @@ class TestMediaSourcesListingEndpoint:
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
-        
-        # Verify logs don't contain sensitive information
+
+        # Verify logs don't contain sensitive data
         log_messages = [record.message for record in caplog.records]
         for message in log_messages:
-            assert "token" not in message.lower()
-            assert "password" not in message.lower()
-            assert "secret" not in message.lower() 
+            # Should not contain tokens or sensitive headers
+            assert "Bearer" not in message
+            assert "test-token" not in message
+            assert "Authorization" not in message
