@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
 
 from app.config import Settings, get_settings
+from app.models.plex_models import PlexUser
 from app.schemas.auth_schemas import (
     OAuthInitiationRequest,
     OAuthInitiationResponse,
@@ -150,12 +151,21 @@ async def complete_oauth_flow(
         if expires_in is not None and not isinstance(expires_in, int):
             raise ValueError("Expires in must be an integer or None")
         
+        # Create PlexUser instance from user_data dict
+        try:
+            plex_user = PlexUser(**user_data)  # pyright: ignore[reportUnknownArgumentType]
+        except Exception as e:
+            raise ValueError(f"Invalid user data structure: {str(e)}") from e
+        
+        # Provide default expires_in if None (e.g., 1 hour)
+        expires_in_seconds = expires_in if expires_in is not None else 3600
+        
         # Return structured response with proper type annotations
         return OAuthCallbackResponse(
             access_token=access_token,
             token_type="Bearer",
-            user=user_data,  # pyright: ignore[reportUnknownArgumentType]
-            expires_in=expires_in
+            user=plex_user,
+            expires_in=expires_in_seconds
         )
         
     except Unauthorized as e:

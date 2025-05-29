@@ -10,7 +10,7 @@ Following security best practices with proper validation.
 """
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
