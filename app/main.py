@@ -10,9 +10,9 @@ Privacy-first architecture with GDPR compliance and secure token management.
 
 import logging
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app.api.routes import auth, media_sources
-from app.config import Settings, get_settings
+from app.config import get_settings
 from app.middleware.security import (
     CSRFProtectionMiddleware,
     RateLimitingMiddleware, 
@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # pyright: igno
     
     # Initialize services and validate configuration
     settings = get_settings()
-    logger.info("Configuration loaded successfully")
+    logger.info(f"Configuration loaded successfully for environment: {settings.environment}")
     
     # Validate PlexAPI configuration
     try:
@@ -238,7 +238,7 @@ def create_app() -> FastAPI:
             }
         }
     )
-    async def health_check(request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedParameter]
+    async def health_check(request: Request) -> JSONResponse:  # pyright: ignore[reportUnusedParameter,reportUnusedFunction]
         """
         Get application health status.
         
@@ -300,7 +300,7 @@ def create_app() -> FastAPI:
         summary="Root endpoint",
         description="Redirects to documentation or health check"
     )
-    async def root() -> JSONResponse:
+    async def root() -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         """Root endpoint providing basic application information."""
         return JSONResponse(
             content={

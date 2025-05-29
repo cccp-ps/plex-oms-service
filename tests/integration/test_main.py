@@ -5,15 +5,15 @@ Tests the FastAPI application initialization, middleware configuration,
 route registration, exception handlers, and health check endpoints.
 """
 
+import json
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from httpx import Response
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.main import app
-from app.config import Settings
 
 
 class TestFastAPIApplicationInitialization:
@@ -135,7 +135,7 @@ class TestHealthCheckAndMonitoring:
             
             assert response.status_code == status.HTTP_200_OK
             
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             assert "status" in data
             assert data["status"] in ["healthy", "degraded", "unhealthy"]
             assert "timestamp" in data
@@ -152,7 +152,7 @@ class TestHealthCheckAndMonitoring:
             
             assert response.status_code == status.HTTP_200_OK
             
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             assert "plex_api" in data
             assert data["plex_api"]["connected"] is True
             assert "response_time_ms" in data["plex_api"]
@@ -169,7 +169,7 @@ class TestHealthCheckAndMonitoring:
             # Health endpoint should still return 200 but indicate degraded status
             assert response.status_code == status.HTTP_200_OK
             
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             assert data["status"] == "degraded"
             assert "plex_api" in data
             assert data["plex_api"]["connected"] is False
@@ -186,7 +186,7 @@ class TestHealthCheckAndMonitoring:
             assert response.headers["content-type"] == "application/json"
             
             # Should include required fields
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             required_fields = ["status", "timestamp", "version"]
             for field in required_fields:
                 assert field in data
@@ -195,7 +195,7 @@ class TestHealthCheckAndMonitoring:
         """Test health check response has proper format and types."""
         with TestClient(app) as client:
             response = client.get("/health")
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             
             # Verify data types
             assert isinstance(data["status"], str)
@@ -203,9 +203,9 @@ class TestHealthCheckAndMonitoring:
             assert isinstance(data["version"], str)
             
             # Verify timestamp format (ISO 8601)
-            from datetime import datetime
             try:
-                datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+                # Use assignment to avoid unused return value warning
+                _ = datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))  # pyright: ignore[reportAny]
             except ValueError:
                 pytest.fail("Timestamp is not in valid ISO 8601 format")
     
@@ -213,7 +213,7 @@ class TestHealthCheckAndMonitoring:
         """Test health endpoint doesn't expose sensitive information."""
         with TestClient(app) as client:
             response = client.get("/health")
-            data = response.json()
+            data = response.json()  # pyright: ignore[reportAny]
             
             # Ensure no sensitive data is exposed
             sensitive_fields = [
@@ -247,7 +247,7 @@ class TestApplicationSecurity:
         """Test rate limiting is applied to endpoints."""
         with TestClient(app) as client:
             # Make multiple rapid requests to test rate limiting
-            responses = []
+            responses: list[int] = []
             for _ in range(10):
                 response = client.get("/health")
                 responses.append(response.status_code)
@@ -260,7 +260,9 @@ class TestApplicationSecurity:
             response = client.get("/health")
             # Rate limit headers might be present depending on configuration
             rate_limit_headers = ["x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"]
-            has_rate_limit_headers = any(
+            # Check if any rate limit headers are present but don't require them
+            # since they might be disabled for health checks
+            _ = any(
                 header.lower() in [h.lower() for h in response.headers.keys()]
                 for header in rate_limit_headers
             )
@@ -291,7 +293,7 @@ class TestApplicationSecurity:
             response = client.get("/nonexistent-endpoint")
             assert response.status_code == status.HTTP_404_NOT_FOUND
             
-            error_data = response.json()
+            error_data = response.json()  # pyright: ignore[reportAny]
             
             # Should not contain stack traces or internal paths
             error_str = json.dumps(error_data).lower()
