@@ -10,6 +10,7 @@ This module provides fixtures for:
 Following TDD principles with type-safe fixture definitions.
 """
 
+import os
 import tempfile
 from collections.abc import AsyncGenerator, Callable, Generator
 from unittest.mock import AsyncMock, MagicMock
@@ -22,6 +23,16 @@ from plexapi.exceptions import BadRequest, NotFound, Unauthorized  # pyright: ig
 from plexapi.myplex import MyPlexAccount, MyPlexPinLogin  # pyright: ignore[reportMissingTypeStubs]
 from plexapi.server import PlexServer  # pyright: ignore[reportMissingTypeStubs]
 
+# Set test environment variables
+os.environ.update({
+    "ENVIRONMENT": "testing",
+    "PLEX_CLIENT_ID": "test-client-id",
+    "PLEX_CLIENT_SECRET": "test-client-secret-with-minimum-32-chars",
+    "SECRET_KEY": "test-secret-key-with-minimum-32-characters-for-security",
+    "CORS_ORIGINS": "http://localhost:3000",
+    "RATE_LIMIT_ENABLED": "false"
+})
+
 
 @pytest.fixture
 def app() -> FastAPI:
@@ -29,6 +40,10 @@ def app() -> FastAPI:
     # Create a minimal FastAPI app for testing
     # This will be replaced with actual app factory when main.py is created
     test_app = FastAPI(title="Test Plex OMS Service", version="0.1.0")
+    
+    # Include auth routes for testing
+    from app.api.routes.auth import router as auth_router
+    test_app.include_router(auth_router)
     
     @test_app.get("/health")
     async def health_check() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
@@ -74,11 +89,15 @@ def mock_plex_pin_login(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_pin_login.waitForLogin = MagicMock()
     mock_pin_login.reload = MagicMock()
     
-    # Patch the class
+    # Patch the class in both locations
     def mock_pin_login_factory(*_args: object, **_kwargs: object) -> MagicMock:
         return mock_pin_login
     
+    # Patch in the original plexapi module
     monkeypatch.setattr("plexapi.myplex.MyPlexPinLogin", mock_pin_login_factory)
+    
+    # Patch in the auth service module where it's imported and used
+    monkeypatch.setattr("app.services.auth_service.MyPlexPinLogin", mock_pin_login_factory)
     
     return mock_pin_login
 
@@ -122,11 +141,15 @@ def mock_plex_account(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     mock_account.accountOptOut = MagicMock()
     mock_account.accountOptOut.optOut = MagicMock(return_value=True)  # pyright: ignore[reportAny]
     
-    # Patch the class
+    # Patch the class in both locations
     def mock_account_factory(*_args: object, **_kwargs: object) -> MagicMock:
         return mock_account
     
+    # Patch in the original plexapi module
     monkeypatch.setattr("plexapi.myplex.MyPlexAccount", mock_account_factory)
+    
+    # Patch in the auth service module where it's imported and used
+    monkeypatch.setattr("app.services.auth_service.MyPlexAccount", mock_account_factory)
     
     return mock_account
 

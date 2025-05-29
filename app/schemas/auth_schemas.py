@@ -1,19 +1,16 @@
 """
-Authentication request/response schemas for Plex OAuth 2.0 flow.
+Authentication request and response schemas.
 
-This module contains Pydantic v2 models for authentication endpoints,
-including OAuth initiation, callback, token refresh, and error handling schemas.
+Pydantic models for OAuth authentication endpoints including:
+- OAuth initiation request and response
+- OAuth callback request and response
+- Session management schemas
 
-Schemas are designed to:
-- Validate OAuth 2.0 flow requests and responses
-- Provide type safety throughout the authentication system
-- Minimize data collection (privacy-first approach)
-- Ensure immutability for security
-- Follow OAuth 2.0 and Plex API standards
+Following security best practices with proper validation.
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
@@ -21,220 +18,128 @@ from app.models.plex_models import PlexUser
 
 
 class OAuthInitiationRequest(BaseModel):
-    """
-    Request schema for OAuth flow initiation.
+    """Request schema for OAuth initiation endpoint."""
     
-    Used for POST /auth/login endpoint to start the OAuth 2.0 flow
-    with Plex using MyPlexPinLogin(oauth=True) for direct login experience.
-    
-    Privacy-focused design: Only essential OAuth parameters are included.
-    """
-    
-    redirect_uri: HttpUrl = Field(
-        default=HttpUrl("http://localhost:8000/auth/callback"),
-        description="OAuth redirect URI for callback handling",
-        examples=["https://app.example.com/auth/callback", "http://localhost:3000/auth/callback"]
-    )
-    
-    scopes: list[str] = Field(
-        default=["read"],
-        min_length=1,
-        description="OAuth scopes for Plex API access",
-        examples=[["read"], ["read", "write"]]
-    )
-    
-    @field_validator('scopes')
-    @classmethod
-    def validate_scopes_not_empty(cls, v: list[str]) -> list[str]:
-        """Validate that scopes list is not empty."""
-        if not v or len(v) == 0:
-            raise ValueError('Scopes list cannot be empty')
-        
-        # Filter out empty/whitespace-only scopes
-        filtered_scopes = [scope.strip() for scope in v if scope and scope.strip()]
-        
-        if not filtered_scopes:
-            raise ValueError('Scopes list cannot contain only empty values')
-        
-        return filtered_scopes
-    
-    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
-        # Ensure model is immutable after creation for security
-        frozen=True,
-        # Use enums by value for JSON serialization
-        use_enum_values=True,
-        # Validate assignment to catch errors early
-        validate_assignment=True,
-        # Populate by name to handle API field name variations
-        populate_by_name=True,
-        # Extra fields not allowed to maintain data minimization
-        extra="forbid",
+    forward_url: HttpUrl | None = Field(
+        default=None,
+        description="Optional URL to redirect to after OAuth completion",
+        examples=["http://localhost:3000/dashboard", "https://example.com/callback"]
     )
 
 
 class OAuthInitiationResponse(BaseModel):
-    """
-    Response schema for OAuth flow initiation.
+    """Response schema for OAuth initiation endpoint."""
     
-    Returned by POST /auth/login endpoint after creating OAuth flow
-    with MyPlexPinLogin(oauth=True) for direct Plex account login.
-    """
-    
-    oauth_url: HttpUrl = Field(
+    oauth_url: str = Field(
         ...,
-        description="OAuth URL for user to authenticate with Plex",
+        description="OAuth URL for direct Plex account login",
         examples=["https://app.plex.tv/auth/#!?clientID=test&code=abc123"]
     )
     
     state: str = Field(
         ...,
-        min_length=1,
+        min_length=32,
         description="Secure state parameter for CSRF protection",
-        examples=["secure-state-parameter-xyz789"]
+        examples=["abcdef123456789_secure_state_parameter"]
     )
-    
-    expires_at: datetime = Field(
-        ...,
-        description="When the OAuth session expires (UTC)",
-        examples=[datetime.now()]
-    )
-    
-    @field_validator('state')
-    @classmethod
-    def validate_state_not_empty(cls, v: str) -> str:
-        """Validate state parameter is not empty or whitespace-only."""
-        if not v or not v.strip():
-            raise ValueError('State parameter cannot be empty or whitespace-only')
-        return v.strip()
-    
-    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
-        # Ensure model is immutable after creation for security
-        frozen=True,
-        # Use enums by value for JSON serialization
-        use_enum_values=True,
-        # Validate assignment to catch errors early
-        validate_assignment=True,
-        # Populate by name to handle API field name variations
-        populate_by_name=True,
-        # Extra fields not allowed to maintain data minimization
-        extra="forbid",
-    )
-
-
-class OAuthCallbackRequest(BaseModel):
-    """
-    Request schema for OAuth callback handling.
-    
-    Used for POST /auth/callback endpoint to complete the OAuth 2.0 flow
-    after user authentication with Plex.
-    
-    Contains authorization code and state parameter for validation.
-    """
     
     code: str = Field(
         ...,
         min_length=1,
-        description="Authorization code from Plex OAuth callback",
+        description="OAuth authorization code for tracking the flow",
+        examples=["auth-code-12345"]
+    )
+    
+    @field_validator('oauth_url')
+    @classmethod
+    def validate_oauth_url(cls, v: str) -> str:
+        """Validate OAuth URL format."""
+        if not v.startswith("https://app.plex.tv/auth"):
+            raise ValueError("OAuth URL must be a valid Plex OAuth URL")
+        return v
+    
+    @field_validator('state')
+    @classmethod
+    def validate_state(cls, v: str) -> str:
+        """Validate state parameter security."""
+        if len(v) < 32:
+            raise ValueError("State parameter must be at least 32 characters")
+        # Verify only URL-safe characters
+        import string
+        allowed_chars = string.ascii_letters + string.digits + "-_"
+        if not all(c in allowed_chars for c in v):
+            raise ValueError("State parameter must contain only URL-safe characters")
+        return v
+
+
+class OAuthCallbackRequest(BaseModel):
+    """Request schema for OAuth callback endpoint."""
+    
+    code: str = Field(
+        ...,
+        min_length=1,
+        description="OAuth authorization code from Plex callback",
         examples=["auth-code-12345"]
     )
     
     state: str = Field(
         ...,
-        min_length=1,
+        min_length=32,
         description="State parameter for CSRF protection validation",
-        examples=["secure-state-parameter-xyz789"]
-    )
-    
-    @field_validator('code')
-    @classmethod
-    def validate_code_not_empty(cls, v: str) -> str:
-        """Validate authorization code is not empty or whitespace-only."""
-        if not v or not v.strip():
-            raise ValueError('Authorization code cannot be empty or whitespace-only')
-        return v.strip()
-    
-    @field_validator('state')
-    @classmethod
-    def validate_state_not_empty(cls, v: str) -> str:
-        """Validate state parameter is not empty or whitespace-only."""
-        if not v or not v.strip():
-            raise ValueError('State parameter cannot be empty or whitespace-only')
-        return v.strip()
-    
-    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
-        # Ensure model is immutable after creation for security
-        frozen=True,
-        # Use enums by value for JSON serialization
-        use_enum_values=True,
-        # Validate assignment to catch errors early
-        validate_assignment=True,
-        # Populate by name to handle API field name variations
-        populate_by_name=True,
-        # Extra fields not allowed to maintain data minimization
-        extra="forbid",
+        examples=["abcdef123456789_secure_state_parameter"]
     )
 
 
 class OAuthCallbackResponse(BaseModel):
-    """
-    Response schema for successful OAuth callback completion.
-    
-    Returned by POST /auth/callback endpoint after successful authentication
-    with Plex OAuth and MyPlexAccount creation.
-    
-    Contains access token and essential user information for session management.
-    """
+    """Response schema for OAuth callback endpoint."""
     
     access_token: str = Field(
         ...,
-        min_length=1,
-        description="Plex access token for API authentication",
-        examples=["plex-access-token-12345"]
+        description="Plex authentication token",
+        examples=["plex-token-abcdef123456"]
     )
     
-    token_type: Literal["Bearer"] = Field(
+    token_type: str = Field(
         default="Bearer",
-        description="Token type (always Bearer for OAuth 2.0)",
-        examples=["Bearer"]
+        description="Token type (always Bearer for OAuth 2.0)"
     )
     
-    expires_in: int = Field(
+    user: dict[str, object] = Field(
         ...,
-        ge=0,
-        description="Token expiration time in seconds from now",
-        examples=[3600, 7200]
+        description="User information from Plex account"
     )
     
-    user: PlexUser = Field(
-        ...,
-        description="Authenticated Plex user information"
-    )
-    
-    refresh_token: str | None = Field(
+    expires_in: int | None = Field(
         default=None,
-        description="Refresh token for token renewal (if supported)",
-        examples=["refresh-token-67890"]
+        description="Token expiration time in seconds (if available)"
+    )
+
+
+class AuthStatusResponse(BaseModel):
+    """Response schema for authentication status endpoint."""
+    
+    authenticated: bool = Field(
+        ...,
+        description="Whether user is currently authenticated"
     )
     
-    @field_validator('access_token')
-    @classmethod
-    def validate_access_token_not_empty(cls, v: str) -> str:
-        """Validate access token is not empty or whitespace-only."""
-        if not v or not v.strip():
-            raise ValueError('Access token cannot be empty or whitespace-only')
-        return v.strip()
+    user: dict[str, object] | None = Field(
+        default=None,
+        description="User information if authenticated"
+    )
+
+
+class LogoutResponse(BaseModel):
+    """Response schema for logout endpoint."""
     
-    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
-        # Ensure model is immutable after creation for security
-        frozen=True,
-        # Use enums by value for JSON serialization
-        use_enum_values=True,
-        # Validate assignment to catch errors early
-        validate_assignment=True,
-        # Populate by name to handle API field name variations
-        populate_by_name=True,
-        # Extra fields not allowed to maintain data minimization
-        extra="forbid",
+    success: bool = Field(
+        default=True,
+        description="Whether logout was successful"
+    )
+    
+    message: str = Field(
+        default="Successfully logged out",
+        description="Logout confirmation message"
     )
 
 
