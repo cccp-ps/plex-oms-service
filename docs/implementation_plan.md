@@ -396,30 +396,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
 
 ## Phase 9: Frontend Core Infrastructure
 
-- [ ] **Module: `frontend/src/types/index.ts`**
-  - [ ] **Analyze Requirements:** Define TypeScript interfaces for API integration
-  - [ ] **Feature: API Response Types**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: User interface matches backend schema
-      - [ ] Test case: MediaSource interface with proper field types
-      - [ ] Test case: Authentication response interfaces
-      - [ ] Test case: Error response interfaces
-    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/types.test.ts`
-    - [ ] **Implementation:** Create TypeScript type definitions
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
-
-- [ ] **Module: `frontend/src/utils/constants.ts`**
-  - [ ] **Analyze Requirements:** Define application constants and configuration
-  - [ ] **Feature: API Configuration Constants**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: API endpoint URLs with environment handling
-      - [ ] Test case: OAuth configuration constants
-      - [ ] Test case: UI text constants for internationalization readiness
-    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/constants.test.ts`
-    - [ ] **Implementation:** Create application constants
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `frontend/src/types/index.ts`**
+  - [x] **Analyze Requirements:** Define TypeScript interfaces for API integration
+  - [x] **Feature: API Response Types**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: User interface matches backend schema
+      - [x] Test case: MediaSource interface with proper field types
+      - [x] Test case: Authentication response interfaces
+      - [x] Test case: Error response interfaces
+    - [x] **TDD: Write Failing Tests:** Implement in `frontend/src/__tests__/types.test.ts`
+    - [x] **Implementation:** Create TypeScript type definitions
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 10: Frontend API Service Layer
 
