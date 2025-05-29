@@ -28,7 +28,7 @@ const DEFAULT_API_BASE_URL = 'http://localhost:8000'
 const DEFAULT_TIMEOUT = 10000 // 10 seconds
 const MAX_RETRY_ATTEMPTS = 3
 const INITIAL_RETRY_DELAY = 1000 // 1 second
-const AUTH_TOKEN_KEY = 'auth_token'
+const AUTH_TOKEN_KEY = 'plex_auth_token'
 
 /**
  * HTTP status codes that should trigger a retry
@@ -283,7 +283,7 @@ class HttpClient {
   }
 
   /**
-   * Make HTTP request with retry logic
+   * Main request method with retry logic and error handling
    */
   async request<T>(endpoint: string, config: ApiRequestConfig): Promise<ApiClientResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`
@@ -297,7 +297,7 @@ class HttpClient {
         const controller = new AbortController()
         const timeoutId = setTimeout(() => controller.abort(), config.timeout || this.defaultTimeout)
         
-        let response: Response
+        let response: Response | undefined
         try {
           response = await fetch(url, {
             ...requestOptions,
@@ -306,15 +306,26 @@ class HttpClient {
           clearTimeout(timeoutId)
         } catch (fetchError) {
           clearTimeout(timeoutId)
-          // Network error occurred - check if we should retry
-          const err = fetchError as Error
-          if (shouldRetry(err, attempt)) {
-            lastError = err
+          
+          // Handle abort errors (timeouts)
+          if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+            lastError = new Error(`Request timeout after ${config.timeout || this.defaultTimeout}ms`)
+          } else {
+            lastError = fetchError instanceof Error ? fetchError : new Error('Network error')
+          }
+          
+          // Check if we should retry network errors
+          if (shouldRetry(lastError, attempt)) {
             await sleep(calculateRetryDelay(attempt))
             attempt++
             continue
           }
-          throw err
+          throw lastError
+        }
+        
+        // Ensure we have a valid response object
+        if (!response) {
+          throw new Error('No response received from server')
         }
         
         // Check if this response should trigger a retry (before parsing)
@@ -328,27 +339,22 @@ class HttpClient {
         return await this.parseResponse<T>(response, endpoint)
         
       } catch (error) {
-        const err = error as Error
+        const err = error instanceof Error ? error : new Error('Unknown error')
         lastError = err
         
-        // If this is a parse error or other non-network error, don't retry
+        // If this is a parse error or other non-retryable error, don't retry
         if (!shouldRetry(err, attempt)) {
           throw err
         }
         
-        // This shouldn't happen since we handle network errors above,
-        // but just in case
+        // For unexpected errors during retry, increment attempt and continue
         await sleep(calculateRetryDelay(attempt))
         attempt++
       }
     }
     
     // If we get here, all retries failed
-    if (lastError) {
-      throw lastError
-    }
-    
-    throw new Error(`Request failed after ${MAX_RETRY_ATTEMPTS} retries`)
+    throw lastError || new Error(`Request failed after ${MAX_RETRY_ATTEMPTS} retries`)
   }
 }
 
@@ -411,15 +417,18 @@ class ApiClient {
    * Logout user
    */
   async logout(): Promise<ApiClientResponse<{ success: boolean }>> {
-    const response = await this.httpClient.request<{ success: boolean }>('/auth/logout', {
-      method: 'POST',
-      requiresAuth: true,
-    })
+    try {
+      const response = await this.httpClient.request<{ success: boolean }>('/auth/logout', {
+        method: 'POST',
+        requiresAuth: true,
+      })
 
-    // Remove token from storage
-    removeAuthToken()
-
-    return response
+      return response
+    } finally {
+      // Always remove token from storage, regardless of server response
+      // This ensures users are logged out locally even if server fails
+      removeAuthToken()
+    }
   }
 
   /**

@@ -71,7 +71,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return {
         ...state,
         isLoading: action.payload,
-        error: action.payload ? null : state.error, // Clear error when starting new operation
+        error: action.payload ? null : state.error,
       }
     
     case 'SET_ERROR':
@@ -79,6 +79,9 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         ...state,
         error: action.payload,
         isLoading: false,
+        isAuthenticated: false,
+        user: null,
+        token: null,
       }
     
     case 'SET_AUTHENTICATED':
@@ -98,7 +101,6 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         user: null,
         token: null,
         isLoading: false,
-        error: null,
       }
     
     case 'CLEAR_ERROR':
@@ -218,14 +220,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Attempt to refresh token
             const refreshResponse = await apiClient.refreshToken()
             
-            if (refreshResponse.ok) {
+            if (refreshResponse.ok && refreshResponse.data.access_token) {
               const newToken = refreshResponse.data.access_token
               storeToken(newToken)
+              
+              // Dispatch success state immediately
               dispatch({
                 type: 'SET_AUTHENTICATED',
                 payload: { user: refreshResponse.data.user, token: newToken },
               })
+              dispatch({ type: 'SET_LOADING', payload: false })
               return
+            } else {
+              throw new Error('Token refresh response was not successful')
             }
           } catch (refreshError) {
             console.warn('Token refresh failed:', refreshError)
@@ -235,6 +242,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Token refresh failed, remove stored token
           removeStoredToken()
           dispatch({ type: 'SET_UNAUTHENTICATED' })
+          dispatch({ type: 'SET_LOADING', payload: false })
           return
         }
         
@@ -243,10 +251,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           type: 'SET_AUTHENTICATED',
           payload: { user, token: storedToken },
         })
+        dispatch({ type: 'SET_LOADING', payload: false })
       } else {
         // User not authenticated, remove stored token
         removeStoredToken()
         dispatch({ type: 'SET_UNAUTHENTICATED' })
+        dispatch({ type: 'SET_LOADING', payload: false })
       }
     } catch (error) {
       console.error('Authentication check failed:', error)
@@ -255,6 +265,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'SET_ERROR',
         payload: error instanceof Error ? error.message : 'Authentication failed',
       })
+      dispatch({ type: 'SET_LOADING', payload: false })
     }
   }, [])
 

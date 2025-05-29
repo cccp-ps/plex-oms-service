@@ -381,13 +381,20 @@ describe('AuthContext', () => {
     })
 
     it('should handle token expiration and automatic refresh', async () => {
+      // Reset mocks
+      mockLocalStorage.getItem.mockClear()
+      mockLocalStorage.setItem.mockClear()
+      mockApiClient.getUserInfo.mockClear()
+      mockApiClient.refreshToken.mockClear()
+
       // Mock expired token scenario
       const expiredUser = {
         ...mockUser,
         token_expires_at: new Date(Date.now() - 1000).toISOString(), // Expired 1 second ago
       }
 
-      mockApiClient.getUserInfo.mockResolvedValue({
+      // First call returns expired user info
+      mockApiClient.getUserInfo.mockResolvedValueOnce({
         data: {
           user: expiredUser,
           authenticated: true,
@@ -403,7 +410,10 @@ describe('AuthContext', () => {
         data: {
           access_token: 'new-token-123',
           token_type: 'Bearer' as const,
-          user: mockUser,
+          user: {
+            ...mockUser,
+            token_expires_at: new Date(Date.now() + 3600000).toISOString(), // Valid for 1 hour
+          },
           expires_in: 3600,
         },
         ok: true,
@@ -411,17 +421,23 @@ describe('AuthContext', () => {
         headers: {},
       })
 
+      mockLocalStorage.getItem.mockReturnValue(mockToken)
+
       const { result } = renderHook(() => useAuth(), {
         wrapper: AuthProvider,
       })
 
-      mockLocalStorage.getItem.mockReturnValue(mockToken)
+      // Explicitly trigger auth check
+      await act(async () => {
+        await result.current.checkAuthStatus()
+      })
 
       // Wait for the authentication check to complete and token refresh
       await waitFor(() => {
         expect(result.current.isAuthenticated).toBe(true)
         expect(result.current.token).toBe('new-token-123')
-      }, { timeout: 3000 })
+        expect(result.current.isLoading).toBe(false)
+      }, { timeout: 5000 })
 
       // Verify token refresh was called and new token was stored
       expect(mockApiClient.refreshToken).toHaveBeenCalled()
@@ -429,6 +445,12 @@ describe('AuthContext', () => {
     })
 
     it('should handle token refresh failure', async () => {
+      // Reset mocks
+      mockLocalStorage.getItem.mockClear()
+      mockLocalStorage.removeItem.mockClear()
+      mockApiClient.getUserInfo.mockClear()
+      mockApiClient.refreshToken.mockClear()
+
       // Mock expired token
       const expiredUser = {
         ...mockUser,
@@ -449,16 +471,22 @@ describe('AuthContext', () => {
       // Mock failed token refresh
       mockApiClient.refreshToken.mockRejectedValue(new Error('Token refresh failed'))
 
+      mockLocalStorage.getItem.mockReturnValue(mockToken)
+
       const { result } = renderHook(() => useAuth(), {
         wrapper: AuthProvider,
       })
 
-      mockLocalStorage.getItem.mockReturnValue(mockToken)
+      // Explicitly trigger auth check
+      await act(async () => {
+        await result.current.checkAuthStatus()
+      })
 
       await waitFor(() => {
         expect(result.current.isAuthenticated).toBe(false)
         expect(result.current.token).toBe(null)
-      }, { timeout: 3000 })
+        expect(result.current.isLoading).toBe(false)
+      }, { timeout: 5000 })
 
       // Verify token was removed on refresh failure
       expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('plex_auth_token')
@@ -472,13 +500,18 @@ describe('AuthContext', () => {
         wrapper: AuthProvider,
       })
 
+      mockLocalStorage.getItem.mockReturnValue(mockToken)
+
       // Trigger initial auth check that will fail
       await act(async () => {
         await result.current.checkAuthStatus()
       })
 
+      // Wait for error state to be set
       await waitFor(() => {
         expect(result.current.error).toBe('Initial error')
+        expect(result.current.isAuthenticated).toBe(false)
+        expect(result.current.isLoading).toBe(false)
       })
 
       // Mock successful operation
@@ -501,6 +534,7 @@ describe('AuthContext', () => {
       await waitFor(() => {
         expect(result.current.error).toBe(null)
         expect(result.current.isAuthenticated).toBe(true)
+        expect(result.current.isLoading).toBe(false)
       })
     })
   })
