@@ -7,6 +7,7 @@ Supports OAuth configuration, CORS settings, and security validation.
 
 from functools import lru_cache
 from typing import Literal
+import os
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -109,9 +110,12 @@ class Settings(BaseSettings):
         elif self.environment == "production":
             object.__setattr__(self, 'debug', False)
         
-        # Disable rate limiting in testing environment
+        # Disable rate limiting in testing environment only if not explicitly set
         if self.environment == "testing":
-            object.__setattr__(self, 'rate_limit_enabled', False)
+            # Check if RATE_LIMIT_ENABLED was explicitly set in environment
+            if os.getenv("RATE_LIMIT_ENABLED") is None:
+                # Only disable if not explicitly set
+                object.__setattr__(self, 'rate_limit_enabled', False)
             
         return self
     

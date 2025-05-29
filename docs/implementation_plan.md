@@ -293,19 +293,19 @@ The plan is organized into logical phases that build upon each other, ensuring a
 
 ## Phase 7: API Routes
 
-- [ ] **Module: `app/api/routes/auth.py`**
-  - [ ] **Analyze Requirements:** Define authentication endpoints for OAuth flow
-  - [ ] **Feature: OAuth Initiation Endpoint**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: POST /auth/login initiates OAuth with MyPlexPinLogin(oauth=True)
-      - [ ] Test case: Return OAuth URL for direct Plex account login
-      - [ ] Test case: Generate and store secure state parameter
-      - [ ] Test case: Handle PlexAPI connection errors
-      - [ ] Test case: Apply rate limiting to prevent abuse
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_auth_routes.py`
-    - [ ] **Implementation:** Create OAuth initiation endpoint
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/api/routes/auth.py`**
+  - [x] **Analyze Requirements:** Define authentication endpoints for OAuth flow
+  - [x] **Feature: OAuth Initiation Endpoint**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: POST /auth/login initiates OAuth with MyPlexPinLogin(oauth=True)
+      - [x] Test case: Return OAuth URL for direct Plex account login
+      - [x] Test case: Generate and store secure state parameter
+      - [x] Test case: Handle PlexAPI connection errors
+      - [x] Test case: Apply rate limiting to prevent abuse
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/integration/test_auth_routes.py`
+    - [x] **Implementation:** Create OAuth initiation endpoint
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: OAuth Callback Endpoint**
     - [ ] **TDD: Define Test Cases:**

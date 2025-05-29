@@ -255,24 +255,19 @@ class TestRateLimitingMiddleware:
         # Import the implemented RateLimitingMiddleware
         from app.middleware.security import RateLimitingMiddleware
 
-        # Mock the settings to avoid validation errors
-        with patch('app.middleware.security.get_settings') as mock_get_settings:
-            mock_settings = Mock()
-            mock_settings.rate_limit_enabled = True
-            mock_get_settings.return_value = mock_settings
+        middleware = [
+            Middleware(
+                RateLimitingMiddleware,
+                default_rate_limit="10/minute",
+                endpoint_limits={
+                    "/auth/login": "5/minute",
+                    "/api/bulk-disable": "2/minute"
+                },
+                enabled=True  # Explicitly enable rate limiting for tests
+            )
+        ]
 
-            middleware = [
-                Middleware(
-                    RateLimitingMiddleware,
-                    default_rate_limit="10/minute",
-                    endpoint_limits={
-                        "/auth/login": "5/minute",
-                        "/api/bulk-disable": "2/minute"
-                    }
-                )
-            ]
-
-            app = Starlette(routes=routes, middleware=middleware)
+        app = Starlette(routes=routes, middleware=middleware)
         return app
 
     def test_implement_per_ip_rate_limiting_using_slowapi(self, app_with_rate_limiting: Starlette) -> None:
@@ -358,35 +353,29 @@ class TestRateLimitingMiddleware:
         
         routes = [Route("/api/test", test_endpoint, methods=["GET"])]
         
-        # Mock the settings to avoid validation errors
-        with patch('app.middleware.security.get_settings') as mock_get_settings:
-            mock_settings = Mock()
-            mock_settings.rate_limit_enabled = True
-            mock_get_settings.return_value = mock_settings
+        middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="2/minute", enabled=True)]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        # IP 1 makes requests
+        with patch('starlette.requests.Request.client') as mock_client:
+            mock_client.host = "192.168.1.1"
             
-            middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="2/minute")]
+            # Exhaust limit for IP 1
+            response1 = client.get("/api/test")
+            assert response1.status_code == 200
+            response2 = client.get("/api/test")  
+            assert response2.status_code == 200
+            response3 = client.get("/api/test")
+            assert response3.status_code == 429  # Rate limited
+        
+        # IP 2 should have its own counter
+        with patch('starlette.requests.Request.client') as mock_client:
+            mock_client.host = "192.168.1.2"
             
-            app = Starlette(routes=routes, middleware=middleware)
-            client = TestClient(app)
-            
-            # IP 1 makes requests
-            with patch('starlette.requests.Request.client') as mock_client:
-                mock_client.host = "192.168.1.1"
-                
-                # Exhaust limit for IP 1
-                response1 = client.get("/api/test")
-                assert response1.status_code == 200
-                response2 = client.get("/api/test")  
-                assert response2.status_code == 200
-                response3 = client.get("/api/test")
-                assert response3.status_code == 429  # Rate limited
-            
-            # IP 2 should have its own counter
-            with patch('starlette.requests.Request.client') as mock_client:
-                mock_client.host = "192.168.1.2"
-                
-                response = client.get("/api/test")
-                assert response.status_code == 200  # Should not be rate limited
+            response = client.get("/api/test")
+            assert response.status_code == 200  # Should not be rate limited
 
     def test_rate_limiting_with_configuration_disabled(self) -> None:
         """Test that rate limiting can be disabled via configuration."""
@@ -398,21 +387,15 @@ class TestRateLimitingMiddleware:
         
         routes = [Route("/api/test", test_endpoint, methods=["GET"])]
         
-        # Mock the settings with rate limiting disabled
-        with patch('app.middleware.security.get_settings') as mock_get_settings:
-            mock_settings = Mock()
-            mock_settings.rate_limit_enabled = False
-            mock_get_settings.return_value = mock_settings
-            
-            middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="1/minute")]
-            
-            app = Starlette(routes=routes, middleware=middleware)
-            client = TestClient(app)
-            
-            # Should be able to make many requests when disabled
-            for _ in range(10):
-                response = client.get("/api/test")
-                assert response.status_code == 200
+        middleware = [Middleware(RateLimitingMiddleware, default_rate_limit="1/minute", enabled=False)]
+        
+        app = Starlette(routes=routes, middleware=middleware)
+        client = TestClient(app)
+        
+        # Should be able to make many requests when disabled
+        for _ in range(10):
+            response = client.get("/api/test")
+            assert response.status_code == 200
 
     def test_rate_limiting_error_responses_format(self, app_with_rate_limiting: Starlette) -> None:
         """Test that rate limit error responses follow the expected format."""

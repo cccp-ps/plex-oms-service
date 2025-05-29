@@ -94,14 +94,15 @@ class TestOAuthInitiationResponse:
         """Test OAuth initiation response with valid data."""
         response_data = {
             "oauth_url": "https://app.plex.tv/auth/#!?clientID=test&code=abc123",
-            "state": "secure-state-parameter-xyz789",
+            "state": "secure-state-parameter-xyz789-that-is-at-least-32-characters",
+            "code": "auth-code-12345",
             "expires_at": datetime.now(timezone.utc)
         }
         
         response = OAuthInitiationResponse(**response_data)  # pyright: ignore[reportArgumentType]
         
         assert str(response.oauth_url) == "https://app.plex.tv/auth/#!?clientID=test&code=abc123"
-        assert response.state == "secure-state-parameter-xyz789"
+        assert response.state == "secure-state-parameter-xyz789-that-is-at-least-32-characters"
         assert response.expires_at is not None
 
     def test_oauth_initiation_response_missing_oauth_url(self) -> None:
@@ -152,13 +153,13 @@ class TestOAuthCallbackRequest:
         """Test OAuth callback request with valid data."""
         request_data = {
             "code": "auth-code-12345",
-            "state": "secure-state-parameter-xyz789"
+            "state": "secure-state-parameter-xyz789-that-is-at-least-32-characters"
         }
         
         request = OAuthCallbackRequest(**request_data)
         
         assert request.code == "auth-code-12345"
-        assert request.state == "secure-state-parameter-xyz789"
+        assert request.state == "secure-state-parameter-xyz789-that-is-at-least-32-characters"
 
     def test_oauth_callback_request_missing_code(self) -> None:
         """Test OAuth callback request with missing authorization code."""

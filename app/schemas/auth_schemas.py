@@ -20,10 +20,44 @@ from app.models.plex_models import PlexUser
 class OAuthInitiationRequest(BaseModel):
     """Request schema for OAuth initiation endpoint."""
     
+    redirect_uri: HttpUrl = Field(
+        default=HttpUrl("http://localhost:8000/auth/callback"),
+        description="OAuth redirect URI for callback after authorization",
+        examples=["https://app.example.com/auth/callback", "http://localhost:3000/auth/callback"]
+    )
+    
+    scopes: list[str] = Field(
+        default=["read"],
+        min_length=1,
+        description="OAuth scopes requested for authorization",
+        examples=[["read"], ["read", "write"]]
+    )
+    
     forward_url: HttpUrl | None = Field(
         default=None,
         description="Optional URL to redirect to after OAuth completion",
         examples=["http://localhost:3000/dashboard", "https://example.com/callback"]
+    )
+    
+    @field_validator('scopes')
+    @classmethod
+    def validate_scopes_not_empty(cls, v: list[str]) -> list[str]:
+        """Validate scopes list is not empty."""
+        if not v or len(v) == 0:
+            raise ValueError('Scopes list cannot be empty')
+        return v
+    
+    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
+        # Ensure model is immutable after creation for security
+        frozen=True,
+        # Use enums by value for JSON serialization
+        use_enum_values=True,
+        # Validate assignment to catch errors early
+        validate_assignment=True,
+        # Populate by name to handle API field name variations
+        populate_by_name=True,
+        # Extra fields not allowed to maintain data minimization
+        extra="forbid",
     )
 
 
@@ -40,7 +74,7 @@ class OAuthInitiationResponse(BaseModel):
         ...,
         min_length=32,
         description="Secure state parameter for CSRF protection",
-        examples=["abcdef123456789_secure_state_parameter"]
+        examples=["abcdef123456789_secure_state_parameter_that_is_at_least_32_chars"]
     )
     
     code: str = Field(
@@ -48,6 +82,11 @@ class OAuthInitiationResponse(BaseModel):
         min_length=1,
         description="OAuth authorization code for tracking the flow",
         examples=["auth-code-12345"]
+    )
+    
+    expires_at: datetime | None = Field(
+        default=None,
+        description="When the OAuth state expires (UTC timestamp)",
     )
     
     @field_validator('oauth_url')
@@ -86,7 +125,7 @@ class OAuthCallbackRequest(BaseModel):
         ...,
         min_length=32,
         description="State parameter for CSRF protection validation",
-        examples=["abcdef123456789_secure_state_parameter"]
+        examples=["abcdef123456789_secure_state_parameter_that_is_at_least_32_chars"]
     )
 
 
@@ -99,19 +138,33 @@ class OAuthCallbackResponse(BaseModel):
         examples=["plex-token-abcdef123456"]
     )
     
-    token_type: str = Field(
+    token_type: Literal["Bearer"] = Field(
         default="Bearer",
         description="Token type (always Bearer for OAuth 2.0)"
     )
     
-    user: dict[str, object] = Field(
+    user: PlexUser = Field(
         ...,
         description="User information from Plex account"
     )
     
-    expires_in: int | None = Field(
-        default=None,
-        description="Token expiration time in seconds (if available)"
+    expires_in: int = Field(
+        ...,
+        ge=0,
+        description="Token expiration time in seconds"
+    )
+    
+    model_config = ConfigDict(  # pyright: ignore[reportUnannotatedClassAttribute]
+        # Ensure model is immutable after creation for security
+        frozen=True,
+        # Use enums by value for JSON serialization
+        use_enum_values=True,
+        # Validate assignment to catch errors early
+        validate_assignment=True,
+        # Populate by name to handle API field name variations
+        populate_by_name=True,
+        # Extra fields not allowed to maintain data minimization
+        extra="forbid",
     )
 
 
