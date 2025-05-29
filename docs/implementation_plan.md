@@ -424,16 +424,16 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: API Endpoint Methods**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Authentication API methods (login, callback, logout)
-      - [ ] Test case: Media sources API methods (list, toggle, bulk disable)
-      - [ ] Test case: Proper error handling for each endpoint
-      - [ ] Test case: Type safety for request/response data
-    - [ ] **TDD: Write Failing Tests:** Add to `frontend/src/services/__tests__/api.test.ts`
-    - [ ] **Implementation:** Create API endpoint methods
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: API Endpoint Methods**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Authentication API methods (login, callback, logout)
+      - [x] Test case: Media sources API methods (list, toggle, bulk disable)
+      - [x] Test case: Proper error handling for each endpoint
+      - [x] Test case: Type safety for request/response data
+    - [x] **TDD: Write Failing Tests:** Add to `frontend/src/services/__tests__/api.test.ts`
+    - [x] **Implementation:** Create API endpoint methods
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 11: Frontend State Management
 

@@ -9,7 +9,6 @@
  */
 
 import type {
-  PlexUser,
   OnlineMediaSource,
   MediaSourceListResponse,
   IndividualSourceToggleRequest,
@@ -17,11 +16,8 @@ import type {
   OAuthInitiationResponse,
   OAuthCallbackResponse,
   UserInfoResponse,
-  ApiResponse,
-  ApiError,
   ApiClientResponse,
   ApiRequestConfig,
-  HttpMethod,
 } from '../types'
 
 // =============================================================================
@@ -141,7 +137,7 @@ function validateRequestData(data: unknown): void {
     const obj = data as Record<string, unknown>
     
     // Check for common type mismatches
-    if ('enabled' in obj && typeof obj.enabled !== 'boolean') {
+    if ('enabled' in obj && typeof obj['enabled'] !== 'boolean') {
       throw new Error('Type validation failed: enabled must be a boolean')
     }
   }
@@ -216,7 +212,7 @@ class HttpClient {
     if (config.requiresAuth !== false) {
       const token = getAuthToken()
       if (token) {
-        headers.Authorization = `Bearer ${token}`
+        headers['Authorization'] = `Bearer ${token}`
       }
     }
 

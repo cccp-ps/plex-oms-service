@@ -663,5 +663,350 @@ describe('API Client', () => {
         await expect(apiClient.getMediaSources()).rejects.toThrow(/validation/i)
       })
     })
+
+    describe('API Endpoint Error Handling', () => {
+      describe('Authentication Endpoint Errors', () => {
+        test('should handle OAuth initiation errors', async () => {
+          // Arrange
+          const errorResponse = {
+            ok: false,
+            status: 500,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'OAUTH_INIT_FAILED',
+                message: 'Failed to initialize OAuth flow',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.initiateOAuth()).rejects.toThrow('Failed to initialize OAuth flow')
+        })
+
+        test('should handle OAuth callback validation errors', async () => {
+          // Arrange
+          const callbackData = {
+            code: 'invalid-code',
+            state: 'invalid-state',
+          }
+          
+          const errorResponse = {
+            ok: false,
+            status: 400,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'INVALID_OAUTH_CODE',
+                message: 'Invalid OAuth authorization code',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.handleOAuthCallback(callbackData)).rejects.toThrow('Invalid OAuth authorization code')
+        })
+
+        test('should handle getUserInfo unauthorized errors', async () => {
+          // Arrange
+          const errorResponse = {
+            ok: false,
+            status: 401,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'TOKEN_EXPIRED',
+                message: 'Authentication token has expired',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.getUserInfo()).rejects.toThrow('Authentication token has expired')
+          
+          // Should remove expired token from storage
+          expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('auth_token')
+        })
+
+        test('should handle logout errors gracefully', async () => {
+          // Arrange
+          const errorResponse = {
+            ok: false,
+            status: 500,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'LOGOUT_FAILED',
+                message: 'Server error during logout',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.logout()).rejects.toThrow('Server error during logout')
+          
+          // Should still remove token from storage even on error
+          expect(mockLocalStorage.removeItem).toHaveBeenCalledWith('auth_token')
+        })
+      })
+
+      describe('Media Sources Endpoint Errors', () => {
+        test('should handle getMediaSources authorization errors', async () => {
+          // Arrange
+          const errorResponse = {
+            ok: false,
+            status: 403,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'INSUFFICIENT_PERMISSIONS',
+                message: 'User does not have permission to access media sources',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.getMediaSources()).rejects.toThrow('User does not have permission to access media sources')
+        })
+
+        test('should handle toggleMediaSource validation errors', async () => {
+          // Arrange
+          const sourceId = 'invalid-source'
+          const toggleRequest: IndividualSourceToggleRequest = { enabled: true }
+          
+          const errorResponse = {
+            ok: false,
+            status: 404,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'SOURCE_NOT_FOUND',
+                message: 'Media source not found or not accessible',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.toggleMediaSource(sourceId, toggleRequest)).rejects.toThrow('Media source not found or not accessible')
+        })
+
+        test('should handle toggleMediaSource conflict errors', async () => {
+          // Arrange
+          const sourceId = 'spotify'
+          const toggleRequest: IndividualSourceToggleRequest = { enabled: false }
+          
+          const errorResponse = {
+            ok: false,
+            status: 409,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'OPERATION_CONFLICT',
+                message: 'Another operation is already in progress for this source',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.toggleMediaSource(sourceId, toggleRequest)).rejects.toThrow('Another operation is already in progress for this source')
+        })
+
+        test('should handle bulkDisableAllSources partial failure', async () => {
+          // Arrange
+          const partialFailureResponse = {
+            ok: true,
+            status: 207,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              data: {
+                success: false,
+                disabled_count: 3,
+                errors: [
+                  {
+                    source_id: 'spotify',
+                    error: 'Source is locked by administrator',
+                    code: 'SOURCE_LOCKED',
+                  },
+                  {
+                    source_id: 'lastfm',
+                    error: 'Service temporarily unavailable',
+                    code: 'SERVICE_UNAVAILABLE',
+                  },
+                ],
+                operation_id: 'bulk-op-456',
+                completed_at: new Date().toISOString(),
+              },
+              success: true,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(partialFailureResponse as any)
+
+          // Act
+          const response = await apiClient.bulkDisableAllSources()
+
+          // Assert
+          expect(response.data.success).toBe(false)
+          expect(response.data.disabled_count).toBe(3)
+          expect(response.data.errors).toHaveLength(2)
+          expect(response.data.errors[0]).toMatchObject({
+            source_id: 'spotify',
+            error: 'Source is locked by administrator',
+            code: 'SOURCE_LOCKED',
+          })
+        })
+
+        test('should handle bulkDisableAllSources complete failure', async () => {
+          // Arrange
+          const errorResponse = {
+            ok: false,
+            status: 503,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'SERVICE_UNAVAILABLE',
+                message: 'Plex service is temporarily unavailable',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(errorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.bulkDisableAllSources()).rejects.toThrow('Plex service is temporarily unavailable')
+        })
+      })
+
+      describe('Rate Limiting and Abuse Prevention', () => {
+        test('should handle rate limiting errors', async () => {
+          // Arrange
+          const rateLimitResponse = {
+            ok: false,
+            status: 429,
+            headers: new Headers({ 
+              'Content-Type': 'application/json',
+              'Retry-After': '60',
+              'X-RateLimit-Remaining': '0',
+            }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'RATE_LIMIT_EXCEEDED',
+                message: 'Too many requests. Please try again later.',
+                timestamp: new Date().toISOString(),
+                retry_after: 60,
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(rateLimitResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.getMediaSources()).rejects.toThrow('Too many requests. Please try again later.')
+        })
+
+        test('should handle abuse detection errors', async () => {
+          // Arrange
+          const abuseResponse = {
+            ok: false,
+            status: 429,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'ABUSE_DETECTED',
+                message: 'Suspicious activity detected. Account temporarily restricted.',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(abuseResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.bulkDisableAllSources()).rejects.toThrow('Suspicious activity detected. Account temporarily restricted.')
+        })
+      })
+
+      describe('Network and Server Errors', () => {
+        test('should handle server maintenance errors', async () => {
+          // Arrange
+          const maintenanceResponse = {
+            ok: false,
+            status: 503,
+            headers: new Headers({ 
+              'Content-Type': 'application/json',
+              'Retry-After': '3600',
+            }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'MAINTENANCE_MODE',
+                message: 'Service is under maintenance. Please try again later.',
+                timestamp: new Date().toISOString(),
+                retry_after: 3600,
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(maintenanceResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.getUserInfo()).rejects.toThrow('Service is under maintenance. Please try again later.')
+        })
+
+        test('should handle Plex API connectivity errors', async () => {
+          // Arrange
+          const plexErrorResponse = {
+            ok: false,
+            status: 502,
+            headers: new Headers({ 'Content-Type': 'application/json' }),
+            json: vi.fn().mockResolvedValue({
+              error: {
+                code: 'PLEX_API_UNAVAILABLE',
+                message: 'Unable to connect to Plex services',
+                timestamp: new Date().toISOString(),
+              },
+              success: false,
+            }),
+          } as const
+          
+          mockFetch.mockResolvedValue(plexErrorResponse as any)
+
+          // Act & Assert
+          await expect(apiClient.getMediaSources()).rejects.toThrow('Unable to connect to Plex services')
+        })
+      })
+    })
   })
 }) 
