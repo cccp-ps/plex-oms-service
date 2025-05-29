@@ -356,17 +356,17 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Bulk Operations Endpoint**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: POST /api/media-sources/disable-all performs bulk disable
-      - [ ] Test case: Use AccountOptOut.optOut() for bulk operations
-      - [ ] Test case: Return operation summary with success/failure counts
-      - [ ] Test case: Handle partial failures appropriately
-      - [ ] Test case: Add confirmation parameter to prevent accidental bulk operations
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
-    - [ ] **Implementation:** Create bulk operations endpoint
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Bulk Operations Endpoint**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: POST /api/media-sources/disable-all performs bulk disable
+      - [x] Test case: Use AccountOptOut.optOut() for bulk operations
+      - [x] Test case: Return operation summary with success/failure counts
+      - [x] Test case: Handle partial failures appropriately
+      - [x] Test case: Add confirmation parameter to prevent accidental bulk operations
+    - [x] **TDD: Write Failing Tests:** Add to `tests/integration/test_media_source_routes.py`
+    - [x] **Implementation:** Create bulk operations endpoint
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 8: Main FastAPI Application
 

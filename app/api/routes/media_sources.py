@@ -20,8 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.models.plex_models import OnlineMediaSource
-from app.schemas.media_source_schemas import IndividualSourceToggleRequest
-from app.services.plex_service import PlexMediaSourceService
+from app.schemas.media_source_schemas import IndividualSourceToggleRequest, BulkDisableRequest
+from app.services.plex_service import PlexMediaSourceService, BulkOperationResult
 from app.utils.exceptions import AuthenticationException, PlexAPIException, ValidationException
 
 # Configure secure logging
@@ -322,6 +322,119 @@ async def toggle_individual_media_source(
     except Exception as e:
         # Handle unexpected errors
         logger.error(f"Unexpected error during source toggle: {source_id[:10]}...")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred. Please try again later."
+        ) from e 
+
+@router.post(
+    "/disable-all",
+    response_model=BulkOperationResult,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk disable all media sources",
+    description="Disable all or specific online media sources in a single operation with confirmation requirement",
+    responses={
+        200: {
+            "description": "Successfully processed bulk disable operation",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "success": True,
+                        "total_requested": 3,
+                        "successful_count": 3,
+                        "failed_count": 0,
+                        "disabled_sources": ["spotify", "tidal", "lastfm"],
+                        "failed_sources": [],
+                        "message": "Successfully disabled 3 media sources"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Authentication required",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Authentication credentials required"}
+                }
+            }
+        },
+        422: {
+            "description": "Invalid request payload or missing confirmation",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Confirmation is required for bulk disable operations"}
+                }
+            }
+        },
+        503: {
+            "description": "Plex API service unavailable",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "Plex API service temporarily unavailable"}
+                }
+            }
+        }
+    }
+)
+async def bulk_disable_all_media_sources(
+    request: Request,  # pyright: ignore[reportUnusedParameter]
+    bulk_request: "BulkDisableRequest",  # pyright: ignore[reportUnusedParameter]
+    token: Annotated[str, Depends(get_current_user_token)]
+) -> BulkOperationResult:
+    """
+    Bulk disable all media sources.
+    
+    Disables all or specific online media sources for the authenticated user.
+    Requires explicit confirmation to prevent accidental bulk operations.
+    Returns detailed operation results including partial failure handling.
+    
+    Args:
+        request: FastAPI request object (for logging context)
+        bulk_request: Request payload containing confirmation and optional source list
+        token: User's authentication token from Authorization header
+        
+    Returns:
+        BulkDisableResponse with operation results and statistics
+        
+    Raises:
+        HTTPException: When validation fails, authentication fails, or operations fail
+    """
+    try:
+        # Log request without sensitive data
+        logger.info("Bulk disable operation request initiated")
+        
+        # Perform bulk disable operation using the service
+        operation_result = plex_service.bulk_disable_all_sources(
+            authentication_token=token
+        )
+        
+        # Log successful response without exposing data
+        success_count = operation_result.get("successful_count", 0)
+        total_count = operation_result.get("total_requested", 0)
+        logger.info(f"Bulk disable operation completed: {success_count}/{total_count} sources processed")
+        
+        return operation_result
+        
+    except AuthenticationException as e:
+        # Handle authentication errors
+        logger.warning("Authentication failed for bulk disable operation")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication failed. Please verify your credentials.",
+            headers={"WWW-Authenticate": "Bearer"}
+        ) from e
+        
+    except PlexAPIException as e:
+        # Handle Plex API connection errors
+        logger.error("Plex API error occurred during bulk disable operation")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Plex API service temporarily unavailable. Please try again later."
+        ) from e
+        
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error("Unexpected error during bulk disable operation")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred. Please try again later."

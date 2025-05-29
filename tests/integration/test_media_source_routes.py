@@ -587,3 +587,395 @@ class TestIndividualSourceManagementEndpoint:
         assert "detail" in response_data
         detail_str = str(response_data["detail"])
         assert "failed" in detail_str.lower() or "operation" in detail_str.lower()
+
+class TestBulkOperationsEndpoint:
+    """Test cases for POST /api/media-sources/disable-all endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_all_performs_bulk_disable(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: POST /api/media-sources/disable-all performs bulk disable."""
+        # Arrange
+        expected_result = {
+            "success": True,
+            "total_requested": 3,
+            "successful_count": 3,
+            "failed_count": 0,
+            "disabled_sources": ["spotify", "tidal", "lastfm"],
+            "failed_sources": [],
+            "message": "Successfully disabled 3 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = expected_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert response_data["success"] is True
+        assert response_data["total_requested"] == 3
+        assert response_data["successful_count"] == 3
+        assert response_data["failed_count"] == 0
+        assert response_data["disabled_sources"] == ["spotify", "tidal", "lastfm"]
+        assert response_data["failed_sources"] == []
+        assert "Successfully disabled 3 media sources" in str(response_data["message"])
+        
+        # Verify service method was called
+        mock_plex_service.bulk_disable_all_sources.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_uses_account_opt_out_for_bulk_operations(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Use AccountOptOut.optOut() for bulk operations."""
+        # Arrange
+        expected_result = {
+            "success": True,
+            "total_requested": 2,
+            "successful_count": 2,
+            "failed_count": 0,
+            "disabled_sources": ["spotify", "tidal"],
+            "failed_sources": [],
+            "message": "Successfully disabled 2 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = expected_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        # Verify the service was called (service internally uses AccountOptOut.optOut())
+        mock_plex_service.bulk_disable_all_sources.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_returns_operation_summary_with_counts(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Return operation summary with success/failure counts."""
+        # Arrange
+        expected_result = {
+            "success": False,
+            "total_requested": 5,
+            "successful_count": 3,
+            "failed_count": 2,
+            "disabled_sources": ["spotify", "tidal", "lastfm"],
+            "failed_sources": ["invalid_source", "error_source"],
+            "message": "Disabled 3 out of 5 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = expected_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert response_data["success"] is False
+        assert response_data["total_requested"] == 5
+        assert response_data["successful_count"] == 3
+        assert response_data["failed_count"] == 2
+        assert len(cast(list[str], response_data["disabled_sources"])) == 3
+        assert len(cast(list[str], response_data["failed_sources"])) == 2
+        assert "3 out of 5" in str(response_data["message"])
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_handles_partial_failures_appropriately(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Handle partial failures appropriately."""
+        # Arrange
+        partial_failure_result = {
+            "success": False,
+            "total_requested": 4,
+            "successful_count": 2,
+            "failed_count": 2,
+            "disabled_sources": ["spotify", "lastfm"],
+            "failed_sources": ["tidal", "youtube"],
+            "message": "Disabled 2 out of 4 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = partial_failure_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, JsonValue], response.json())
+        
+        # Verify partial failure is handled correctly
+        assert response_data["success"] is False
+        assert response_data["successful_count"] == 2
+        assert response_data["failed_count"] == 2
+        assert cast(int, response_data["successful_count"]) + cast(int, response_data["failed_count"]) == response_data["total_requested"]
+        
+        # Verify sources are correctly categorized
+        disabled_sources = cast(list[str], response_data["disabled_sources"])
+        failed_sources = cast(list[str], response_data["failed_sources"])
+        assert "spotify" in disabled_sources
+        assert "lastfm" in disabled_sources
+        assert "tidal" in failed_sources
+        assert "youtube" in failed_sources
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_requires_confirmation_parameter(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str]
+    ) -> None:
+        """Test case: Add confirmation parameter to prevent accidental bulk operations."""
+        # Test missing confirmation parameter
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        
+        # Test confirmation set to False
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": False}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        
+        # Test invalid confirmation type
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": "invalid"}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_requires_authentication(
+        self,
+        async_client: AsyncClient
+    ) -> None:
+        """Test case: Require authentication for bulk operations."""
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert "detail" in response_data
+        detail_str = str(response_data["detail"])
+        assert "authenticate" in detail_str.lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_handles_plex_api_errors_gracefully(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Handle PlexAPI errors gracefully."""
+        # Arrange
+        from app.utils.exceptions import PlexAPIException
+        mock_plex_service.bulk_disable_all_sources.side_effect = PlexAPIException(  # pyright: ignore[reportAny]
+            "Failed to connect to Plex API"
+        )
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert "detail" in response_data
+        detail_str = str(response_data["detail"])
+        assert "plex" in detail_str.lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_handles_authentication_errors(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Handle authentication errors from PlexAPI."""
+        # Arrange
+        from app.utils.exceptions import AuthenticationException
+        mock_plex_service.bulk_disable_all_sources.side_effect = AuthenticationException(  # pyright: ignore[reportAny]
+            "Authentication failed with provided token"
+        )
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert "detail" in response_data
+        detail_str = str(response_data["detail"])
+        assert "authentication" in detail_str.lower()
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_handles_empty_sources_list(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Handle empty sources list gracefully."""
+        # Arrange
+        empty_result = {
+            "success": True,
+            "total_requested": 0,
+            "successful_count": 0,
+            "failed_count": 0,
+            "disabled_sources": [],
+            "failed_sources": [],
+            "message": "No media sources found to disable"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = empty_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        response_data = cast(dict[str, JsonValue], response.json())
+        assert response_data["success"] is True
+        assert response_data["total_requested"] == 0
+        assert response_data["successful_count"] == 0
+        assert response_data["failed_count"] == 0
+        assert "No media sources found" in str(response_data["message"])
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_validates_request_payload(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str]
+    ) -> None:
+        """Test case: Validate request payload structure."""
+        # Test empty request body
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={}
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # Test invalid JSON
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            content="invalid json"
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_includes_content_type_header(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock
+    ) -> None:
+        """Test case: Ensure proper content type header in response."""
+        # Arrange
+        expected_result = {
+            "success": True,
+            "total_requested": 1,
+            "successful_count": 1,
+            "failed_count": 0,
+            "disabled_sources": ["spotify"],
+            "failed_sources": [],
+            "message": "Successfully disabled 1 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = expected_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers.get("content-type") == "application/json"
+
+    @pytest.mark.asyncio
+    async def test_bulk_disable_logs_requests_securely(
+        self,
+        async_client: AsyncClient,
+        authenticated_headers: dict[str, str],
+        mock_plex_service: MagicMock,
+        caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Test case: Log requests securely without exposing sensitive data."""
+        # Arrange
+        expected_result = {
+            "success": True,
+            "total_requested": 2,
+            "successful_count": 2,
+            "failed_count": 0,
+            "disabled_sources": ["spotify", "tidal"],
+            "failed_sources": [],
+            "message": "Successfully disabled 2 media sources"
+        }
+        mock_plex_service.bulk_disable_all_sources.return_value = expected_result  # pyright: ignore[reportAny]
+
+        # Act
+        response = await async_client.post(
+            "/api/media-sources/disable-all",
+            headers=authenticated_headers,
+            json={"confirm": True}
+        )
+
+        # Assert
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Verify secure logging (no sensitive tokens in logs)
+        log_messages = [record.message for record in caplog.records]
+        for message in log_messages:
+            assert "Bearer" not in message
+            assert len([char for char in message if char.isalnum() and len(message) > 20]) < 20  # No long tokens
