@@ -370,29 +370,29 @@ The plan is organized into logical phases that build upon each other, ensuring a
 
 ## Phase 8: Main FastAPI Application
 
-- [ ] **Module: `app/main.py`**
-  - [ ] **Analyze Requirements:** Define FastAPI application setup and configuration
-  - [ ] **Feature: FastAPI Application Initialization**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Initialize FastAPI app with proper configuration
-      - [ ] Test case: Configure CORS middleware with security settings
-      - [ ] Test case: Register authentication and media source routes
-      - [ ] Test case: Set up exception handlers
-      - [ ] Test case: Configure security middleware
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_main.py`
-    - [ ] **Implementation:** Create FastAPI application with all middleware and routes
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/main.py`**
+  - [x] **Analyze Requirements:** Define FastAPI application setup and configuration
+  - [x] **Feature: FastAPI Application Initialization**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Initialize FastAPI app with proper configuration
+      - [x] Test case: Configure CORS middleware with security settings
+      - [x] Test case: Register authentication and media source routes
+      - [x] Test case: Set up exception handlers
+      - [x] Test case: Configure security middleware
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/integration/test_main.py`
+    - [x] **Implementation:** Create FastAPI application with all middleware and routes
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
-  - [ ] **Feature: Health Check and Monitoring**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: GET /health returns application health status
-      - [ ] Test case: Include PlexAPI connectivity check in health endpoint
-      - [ ] Test case: Return proper status codes for health checks
-    - [ ] **TDD: Write Failing Tests:** Add to `tests/integration/test_main.py`
-    - [ ] **Implementation:** Add health check endpoints
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+  - [x] **Feature: Health Check and Monitoring**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: GET /health returns application health status
+      - [x] Test case: Include PlexAPI connectivity check in health endpoint
+      - [x] Test case: Return proper status codes for health checks
+    - [x] **TDD: Write Failing Tests:** Add to `tests/integration/test_main.py`
+    - [x] **Implementation:** Add health check endpoints
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 9: Frontend Core Infrastructure
 

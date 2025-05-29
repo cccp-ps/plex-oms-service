@@ -17,6 +17,7 @@ import logging
 import random
 import socket
 import time
+import asyncio
 from typing import TYPE_CHECKING, TypedDict
 
 from plexapi.exceptions import BadRequest, Unauthorized  # pyright: ignore[reportMissingTypeStubs]
@@ -71,6 +72,49 @@ class PlexMediaSourceService:
     def settings(self) -> "Settings":
         """Get the current settings instance."""
         return self._settings
+    
+    async def check_connectivity(self) -> bool:
+        """
+        Check PlexAPI connectivity for health monitoring.
+        
+        Performs a lightweight connectivity check to Plex services
+        without requiring authentication. Used for health endpoints.
+        
+        Returns:
+            True if Plex services are reachable, False otherwise
+        """
+        try:
+            # Use asyncio to run the connectivity check in a thread pool
+            # since PlexAPI doesn't have async support
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(None, self._sync_check_connectivity)
+        except Exception as e:
+            logger.warning(f"Async connectivity check failed: {str(e)}")
+            return False
+    
+    def _sync_check_connectivity(self) -> bool:
+        """
+        Synchronous connectivity check to Plex services.
+        
+        Returns:
+            True if connectivity is successful, False otherwise
+        """
+        try:
+            # Try to connect to Plex's main domain
+            socket.setdefaulttimeout(5.0)  # 5 second timeout
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            result = sock.connect_ex(('plex.tv', 443))
+            sock.close()
+            
+            # Return True if connection was successful (result == 0)
+            return result == 0
+            
+        except Exception as e:
+            logger.debug(f"Connectivity check failed: {str(e)}")
+            return False
+        finally:
+            # Reset socket timeout to default
+            socket.setdefaulttimeout(None)
     
     def get_media_sources(self, authentication_token: str | None) -> list[OnlineMediaSource]:
         """
