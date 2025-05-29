@@ -330,19 +330,19 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `app/api/routes/media_sources.py`**
-  - [ ] **Analyze Requirements:** Define media source management endpoints
-  - [ ] **Feature: Media Sources Listing Endpoint**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: GET /api/media-sources returns user's online media sources
-      - [ ] Test case: Require authentication for access
-      - [ ] Test case: Filter and transform data for privacy compliance
-      - [ ] Test case: Handle PlexAPI errors gracefully
-      - [ ] Test case: Return proper HTTP status codes
-    - [ ] **TDD: Write Failing Tests:** Implement in `tests/integration/test_media_source_routes.py`
-    - [ ] **Implementation:** Create media sources listing endpoint
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `app/api/routes/media_sources.py`**
+  - [x] **Analyze Requirements:** Define media source management endpoints
+  - [x] **Feature: Media Sources Listing Endpoint**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: GET /api/media-sources returns user's online media sources
+      - [x] Test case: Require authentication for access
+      - [x] Test case: Filter and transform data for privacy compliance
+      - [x] Test case: Handle PlexAPI errors gracefully
+      - [x] Test case: Return proper HTTP status codes
+    - [x] **TDD: Write Failing Tests:** Implement in `tests/integration/test_media_source_routes.py`
+    - [x] **Implementation:** Create media sources listing endpoint
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
   - [ ] **Feature: Individual Source Management Endpoint**
     - [ ] **TDD: Define Test Cases:**

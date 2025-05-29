@@ -45,6 +45,10 @@ def app() -> FastAPI:
     from app.api.routes.auth import router as auth_router
     test_app.include_router(auth_router)
     
+    # Include media sources routes for testing
+    from app.api.routes.media_sources import router as media_sources_router
+    test_app.include_router(media_sources_router)
+    
     @test_app.get("/health")
     async def health_check() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
         return {"status": "ok"}
@@ -369,4 +373,43 @@ def mock_httpx_client() -> AsyncMock:
     mock_client.post = AsyncMock()
     mock_client.patch = AsyncMock()
     mock_client.delete = AsyncMock()
-    return mock_client 
+    return mock_client
+
+
+# Media Sources Service Fixtures
+
+@pytest.fixture
+def mock_plex_service(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Mock PlexMediaSourceService for testing media sources endpoints."""
+    mock_service = MagicMock()
+    
+    # Mock the get_media_sources method
+    mock_service.get_media_sources = MagicMock(return_value=[])
+    
+    # Mock the toggle_individual_source method
+    mock_service.toggle_individual_source = MagicMock(return_value=True)
+    
+    # Mock the bulk_disable_all_sources method
+    mock_service.bulk_disable_all_sources = MagicMock(return_value={
+        "success": True,
+        "total_requested": 0,
+        "successful_count": 0,
+        "failed_count": 0,
+        "disabled_sources": [],
+        "failed_sources": [],
+        "message": "No sources to disable"
+    })
+    
+    # Patch the service in the routes module
+    monkeypatch.setattr("app.api.routes.media_sources.plex_service", mock_service)
+    
+    return mock_service
+
+
+@pytest.fixture
+def authenticated_headers(valid_auth_token: str) -> dict[str, str]:
+    """Provide authenticated headers for protected endpoints."""
+    return {
+        "Authorization": f"Bearer {valid_auth_token}",
+        "Content-Type": "application/json"
+    } 
