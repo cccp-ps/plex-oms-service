@@ -463,18 +463,18 @@ The plan is organized into logical phases that build upon each other, ensuring a
     - [x] **TDD: Verify Tests Pass**
     - [x] **Refactor:** Review and optimize the implementation
 
-- [ ] **Module: `frontend/src/hooks/useMediaSources.tsx`**
-  - [ ] **Analyze Requirements:** Create media sources data management hook
-  - [ ] **Feature: Media Sources State Management**
-    - [ ] **TDD: Define Test Cases:**
-      - [ ] Test case: Fetch and cache media sources data
-      - [ ] Test case: Handle optimistic updates for better UX
-      - [ ] Test case: Implement error handling with retry logic
-      - [ ] Test case: Cache invalidation after mutations
-    - [ ] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useMediaSources.test.tsx`
-    - [ ] **Implementation:** Create useMediaSources hook with React Query integration
-    - [ ] **TDD: Verify Tests Pass**
-    - [ ] **Refactor:** Review and optimize the implementation
+- [x] **Module: `frontend/src/hooks/useMediaSources.tsx`**
+  - [x] **Analyze Requirements:** Create media sources data management hook
+  - [x] **Feature: Media Sources State Management**
+    - [x] **TDD: Define Test Cases:**
+      - [x] Test case: Fetch and cache media sources data
+      - [x] Test case: Handle optimistic updates for better UX
+      - [x] Test case: Implement error handling with retry logic
+      - [x] Test case: Cache invalidation after mutations
+    - [x] **TDD: Write Failing Tests:** Implement in `frontend/src/hooks/__tests__/useMediaSources.test.tsx`
+    - [x] **Implementation:** Create useMediaSources hook with React Query integration
+    - [x] **TDD: Verify Tests Pass**
+    - [x] **Refactor:** Review and optimize the implementation
 
 ## Phase 12: Frontend UI Components
 

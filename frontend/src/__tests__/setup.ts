@@ -5,11 +5,52 @@
  * and API interface testing.
  */
 
-import { beforeAll, afterEach, afterAll } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { beforeAll, afterEach, afterAll, vi } from 'vitest'
+import { cleanup, configure } from '@testing-library/react'
 
 // Setup DOM globals for testing environment
 import '@testing-library/jest-dom'
+
+// Configure React Testing Library for React 18
+configure({
+  // React 18 automatic batching configuration
+  reactStrictMode: true,
+  // Avoid act warnings for async operations
+  asyncUtilTimeout: 5000,
+})
+
+// Mock IntersectionObserver for components that might use it
+global.IntersectionObserver = vi.fn().mockImplementation((_callback: IntersectionObserverCallback) => ({
+  observe: vi.fn(),
+  disconnect: vi.fn(),
+  unobserve: vi.fn(),
+  root: null,
+  rootMargin: '0px',
+  thresholds: [0],
+  takeRecords: vi.fn().mockReturnValue([]),
+})) as unknown as typeof IntersectionObserver
+
+// Mock ResizeObserver for components that might use it
+global.ResizeObserver = vi.fn().mockImplementation((_callback: ResizeObserverCallback) => ({
+  observe: vi.fn(),
+  disconnect: vi.fn(),
+  unobserve: vi.fn(),
+})) as unknown as typeof ResizeObserver
+
+// Mock window.matchMedia for responsive components
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+})
 
 // Cleanup after each test
 afterEach(() => {
