@@ -57,7 +57,7 @@ async def create_authenticated_client(async_client: AsyncClient) -> tuple[AsyncC
     
     # Create new client with cookies set at client level
     authenticated_client = AsyncClient(
-        transport=async_client._transport,
+        transport=async_client._transport,  # pyright: ignore[reportPrivateUsage]
         base_url=async_client.base_url,
         cookies=session_cookies
     )
@@ -852,7 +852,7 @@ class TestSessionManagementEndpoints:
         
         # Create client with cleared cookies
         logged_out_client = AsyncClient(
-            transport=async_client._transport,
+            transport=async_client._transport,  # pyright: ignore[reportPrivateUsage]
             base_url=async_client.base_url,
             cookies=logout_cookies
         )
