@@ -1,0 +1,23 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Follow these guidelines:
+
+- For Python development:
+  - Use `uv` or `uvx` for all Python commands (e.g., `uv run`, `uv run pytest`, `uv pip`).
+  - Adhere to Python 3.13+ best practices.
+  - Employ TDD (test-driven development).
+  - Verify type safety using `uvx basedpyright`.
+  - Install type stubs for dependencies (e.g., `uv pip install types-requests`) only when `basedpyright` reports missing type stubs.
+  - Prefer `# pyright: ignore` over `# type: ignore` comments.
+  - Use global and targeted ignores only where absolutely necessary.
+
+- For TypeScript/JavaScript development:
+  - Use `npm` or `yarn` for all Node.js/TypeScript package management.
+  - Adhere to TypeScript 5.3+ and React 18.2+ best practices.
+  - Employ TDD (test-driven development).
+  - Verify type safety using `npm run type-check` or `npx tsc --noEmit`.
+  - Use `@ts-expect-error` or `@ts-ignore` comments only when necessary (e.g., for intentional type errors in tests or mocks).
+  - Prefer proper typing and interfaces; use ignore comments sparingly and only when absolutely necessary.
